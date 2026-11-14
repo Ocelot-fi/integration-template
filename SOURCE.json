@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "25cdb9d81afa0e960bbfcd6b1471838836ab4ead",
-  "runtime_commit": "25cdb9d81afa0e960bbfcd6b1471838836ab4ead",
+  "ocelot_source_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6",
+  "runtime_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Native default midpoint fallback with five-bp final-output discount only for locked/crossed books. Direction-aware tick rounding. Known wider-crossing overquotes retained and disclosed; explicit Titan engineering/error-policy acceptance required. Earlier conservative-provider sign-off does not cover this new approximation. No activation approval.",
+  "review_scope": "Capacity-only follow-up to 0581d19: full exits retain favorable original-book price bounds. Native curves, five-bp midpoint adjustment and partial routing behavior unchanged. Known wider-crossing output errors remain explicitly accepted implementation policy pending Titan acceptance; no activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,5 +11,5 @@
   "exported_at": "2026-11-14",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "b597dddf7c5ea8bd053e7cf8507dff8ee478e84e"
+  "previous_runtime_commit": "25cdb9d81afa0e960bbfcd6b1471838836ab4ead"
 }

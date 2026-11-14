@@ -373,6 +373,15 @@ pub struct NativePhoenix {
     can_redeem: bool,
 }
 impl NativePhoenix {
+    /// Preserve favorable ORIGINAL prices when an approximate book is prepared.
+    /// These fields reserve full-exit withdrawal capacity only; neither the
+    /// prepared curve nor modeled fills, risk limits or partial exits use them.
+    pub(super) fn with_full_exit_price_bounds(mut self, bid: u64, ask: u64) -> Self {
+        self.best_bid = self.best_bid.max(bid);
+        self.best_ask = self.best_ask.min(ask);
+        self
+    }
+
     pub fn prepare(s: &State) -> Result<Self> {
         let g = owned(s, PHOENIX_GLOBAL, "account:global_configuration", 1104)?;
         let restart = u64_at(

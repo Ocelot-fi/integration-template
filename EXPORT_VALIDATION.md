@@ -1,4 +1,37 @@
-# Standalone midpoint export validation, 14 November 2026
+# Full-exit capacity follow-up export, 14 November 2026
+
+Source `2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6` preserves favorable original-book prices for the complete-close
+withdrawal reserve. Quote curves, the five-bp discount, partial routing ranges,
+instructions and the approximation/availability policy are unchanged. The new
+admission check is restricted to full-market exits with insufficient reserved
+capacity; some conservative declines are possible near that bound.
+
+Source verification: 71 reference / 44 default / 40 shared tests pass, both Clippy
+configurations and formatting pass. Both new capacity regressions fail at
+`0581d19`. Full-exit-only runs add 60 successful original-account executions,
+including 12 retained controlled-state overquotes. The old dense range sweeps
+and benchmarks are historical, not rerun for this capacity-only change.
+
+Standalone verification passes: **9 focused reference tests, 6 focused default
+tests**, both Clippy configurations with warnings denied, and formatting. Rust,
+fixtures, tests, manifests/locks and measurements are byte-identical to the
+committed source; shared assertions match pinned upstream and all exported files
+pass screening. Dependency/build caches were reused, with the exported package
+recompiled from this checkout. The complete 71/44/40 source suites were not
+repeated after a byte-identical export; this is not a clean-machine install.
+
+Focused reproduction:
+
+```sh
+cargo +1.96.0 test --profile release-debug --locked --features reference-simulation --test ocelot_full_exit --test ocelot_midpoint --test ocelot_quote_regression
+cargo +1.96.0 test --profile release-debug --locked --test ocelot_full_exit --test ocelot_midpoint --test ocelot_quote_regression
+```
+Program sources, shared assertion source and SBF artifacts are unchanged; no SBF
+rebuild or activation is claimed. The detailed changes and limitations are in
+[MIDPOINT_VALIDATION.md](MIDPOINT_VALIDATION.md) and
+[FULL_EXIT_MEASUREMENTS.json](FULL_EXIT_MEASUREMENTS.json).
+
+## Historical standalone midpoint export validation, 14 November 2026
 
 Exported source: `25cdb9d81afa0e960bbfcd6b1471838836ab4ead`. The default adapter now uses direction-aware native
 midpoint preparation with a five-bp final-output discount only for locked/crossed

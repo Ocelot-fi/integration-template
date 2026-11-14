@@ -1,0 +1,538 @@
+{
+  "date": "2026-11-14",
+  "pre_fix_public_commit": "0581d194ca513c5eebac74e47d6ac10cbb2dc1c0",
+  "scope": "Capacity-only full-market exit correction; quote curves and five-bp discount unchanged. Earlier advertised-range sweeps excluded full exits.",
+  "captured_full_exits": [
+    {
+      "actual": 2697403423,
+      "case": "captured/sol-locked-468615258.bin.gz/market=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 2695232839
+    },
+    {
+      "actual": 209453020,
+      "case": "captured/sol-locked-468615258.bin.gz/market=1",
+      "execution_error": null,
+      "input": 170436753,
+      "quote_error": null,
+      "quoted": 209347762
+    },
+    {
+      "actual": 2700831741,
+      "case": "captured/sol-crossed-468615690.bin.gz/market=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 2698236078
+    },
+    {
+      "actual": 209294436,
+      "case": "captured/sol-crossed-468615690.bin.gz/market=1",
+      "execution_error": null,
+      "input": 170436753,
+      "quote_error": null,
+      "quoted": 209136425
+    }
+  ],
+  "controlled_full_exits": [
+    {
+      "actual": 3698716041,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3695640827
+    },
+    {
+      "actual": 3697856928,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=1",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3694440960
+    },
+    {
+      "actual": 3696642608,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=2",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3694440960
+    },
+    {
+      "actual": 3694213969,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=4",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3693227248
+    },
+    {
+      "actual": 3689356690,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=8",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3690799822
+    },
+    {
+      "actual": 3679642133,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=16",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3685944973
+    },
+    {
+      "actual": 3660213018,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=false/cross_ticks=32",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3676235273
+    },
+    {
+      "actual": 3699071247,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3696854539
+    },
+    {
+      "actual": 3700285567,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=1",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3696854539
+    },
+    {
+      "actual": 3701499886,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=2",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3698068251
+    },
+    {
+      "actual": 3703928525,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=4",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3698622217
+    },
+    {
+      "actual": 3708785805,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=8",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3698622217
+    },
+    {
+      "actual": 3718500361,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=16",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3698622217
+    },
+    {
+      "actual": 3737929475,
+      "case": "controlled/sol3l-465928618.bin.gz/raise=true/cross_ticks=32",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3698622217
+    },
+    {
+      "actual": 20698746,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=0",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20693132
+    },
+    {
+      "actual": 20703533,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=1",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20693132
+    },
+    {
+      "actual": 20708321,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=2",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20697916
+    },
+    {
+      "actual": 20717895,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=4",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20702702
+    },
+    {
+      "actual": 20737044,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=8",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20712271
+    },
+    {
+      "actual": 20775343,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=16",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20717833
+    },
+    {
+      "actual": 20851938,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=false/cross_ticks=32",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20717833
+    },
+    {
+      "actual": 20698746,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=0",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20688347
+    },
+    {
+      "actual": 20693959,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=1",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20683562
+    },
+    {
+      "actual": 20689171,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=2",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20683562
+    },
+    {
+      "actual": 20679597,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=4",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20678777
+    },
+    {
+      "actual": 20660448,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=8",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20669208
+    },
+    {
+      "actual": 20622150,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=16",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20650068
+    },
+    {
+      "actual": 20545553,
+      "case": "controlled/sol2s-465928707.bin.gz/raise=true/cross_ticks=32",
+      "execution_error": null,
+      "input": 20300431,
+      "quote_error": null,
+      "quoted": 20611788
+    },
+    {
+      "actual": 3239182545,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3236637340
+    },
+    {
+      "actual": 3238604487,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=1",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3235533503
+    },
+    {
+      "actual": 3238604487,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=2",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3235533503
+    },
+    {
+      "actual": 3236395708,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=4",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3234429667
+    },
+    {
+      "actual": 3231978153,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=8",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3232221993
+    },
+    {
+      "actual": 3223143040,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=16",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3227806646
+    },
+    {
+      "actual": 3205472816,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=32",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3218975951
+    },
+    {
+      "actual": 3241618858,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=0",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3237741177
+    },
+    {
+      "actual": 3242723246,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=1",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3237741177
+    },
+    {
+      "actual": 3243022042,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=2",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3238845014
+    },
+    {
+      "actual": 3245230821,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=4",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3239948851
+    },
+    {
+      "actual": 3249648377,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=8",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3242156524
+    },
+    {
+      "actual": 3258483489,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=16",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3242536278
+    },
+    {
+      "actual": 3276153713,
+      "case": "controlled/sol3l-467430913.bin.gz/raise=true/cross_ticks=32",
+      "execution_error": null,
+      "input": 3448654926,
+      "quote_error": null,
+      "quoted": 3242536278
+    },
+    {
+      "actual": 11035129,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=0",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11029583
+    },
+    {
+      "actual": 11037721,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=1",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11029583
+    },
+    {
+      "actual": 11037721,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=2",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11032175
+    },
+    {
+      "actual": 11042907,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=4",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11034766
+    },
+    {
+      "actual": 11053280,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=8",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11039950
+    },
+    {
+      "actual": 11074024,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=16",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11050317
+    },
+    {
+      "actual": 11115515,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=false/cross_ticks=32",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11053003
+    },
+    {
+      "actual": 11029942,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=0",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11026991
+    },
+    {
+      "actual": 11027349,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=1",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11024399
+    },
+    {
+      "actual": 11027349,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=2",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11024399
+    },
+    {
+      "actual": 11022163,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=4",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11021807
+    },
+    {
+      "actual": 11011790,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=8",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11016623
+    },
+    {
+      "actual": 10991045,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=16",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 11006257
+    },
+    {
+      "actual": 10949556,
+      "case": "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=32",
+      "execution_error": null,
+      "input": 9991624,
+      "quote_error": null,
+      "quoted": 10985522
+    }
+  ],
+  "focused_regressions": {
+    "full_exit_previous_output_controls": 12,
+    "throttle_cases": 4,
+    "unchanged_partial_quote_comparisons": 1032,
+    "normal_baseline_lines": 64716,
+    "normal_baseline_instructions": 487,
+    "normal_baseline_source": "035781b77ea434f8c91629c3af4c99afca5ef64a",
+    "normal_baseline_sha256": "67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe",
+    "both_capacity_tests_fail_before_fix": true
+  },
+  "checks": [
+    {
+      "name": "reference",
+      "exit_code": 0
+    },
+    {
+      "name": "default",
+      "exit_code": 0
+    },
+    {
+      "name": "clippy-reference",
+      "exit_code": 0
+    },
+    {
+      "name": "clippy-default",
+      "exit_code": 0
+    },
+    {
+      "name": "fmt",
+      "exit_code": 0
+    },
+    {
+      "name": "full-exit-captured",
+      "exit_code": 0
+    },
+    {
+      "name": "full-exit-controlled",
+      "exit_code": 0
+    },
+    {
+      "name": "shared-build",
+      "exit_code": 0
+    },
+    {
+      "name": "shared-run",
+      "exit_code": 0
+    }
+  ],
+  "note": "Known wider-crossing full-exit overquotes remain intentional policy evidence, not new price corrections; actual executions use original supplied accounts. Prior dense in-range sweeps and timing are not rerun for this capacity-only change."
+}

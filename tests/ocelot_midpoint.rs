@@ -247,6 +247,48 @@ async fn refresh_transitions_remove_discount_and_failed_refresh_clears_state() {
 }
 
 #[tokio::test]
+async fn clock_only_expiry_restores_normal_quotes_without_the_extra_discount() {
+    let (mut v, mut cache) = captured("sol-locked-468615258.bin.gz", 0).await;
+    let s = v.state().unwrap();
+    let k = spline_key(s.config.book);
+    let mut clock = s.clock.clone();
+    let r = request(&v, true, 1_000_000);
+    let d = &mut cache.0.get_mut(&k).unwrap().as_mut().unwrap().data;
+    let count = u32::from_le_bytes(d[72..76].try_into().unwrap()) as usize;
+    for i in 0..count {
+        let o = 112 + i * 1336;
+        put64(d, o + 64, clock.slot);
+        for j in 0..20 {
+            // Only the first maker expires. The other live maker retains a
+            // normal two-sided book, so refresh AND quoting must still work.
+            put64(d, o + 120 + j * 48 + 40, if i == 0 { 0 } else { 100 });
+        }
+    }
+    v.update_state(&cache).await.unwrap();
+    assert!(v.uses_midpoint_approximation());
+    assert!(v.quote(r.clone()).is_ok());
+    clock.slot += 1;
+    cache
+        .0
+        .get_mut(&solana_sdk_ids::sysvar::clock::ID)
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .data = bincode::serialize(&clock).unwrap();
+    v.update_state(&cache).await.unwrap();
+    assert!(v.initialized());
+    assert!(!v.uses_midpoint_approximation());
+    let q = v.quote(r.clone()).unwrap();
+    let mut strict = v.clone();
+    strict.set_phoenix_factory(Arc::new(StrictFactory)).unwrap();
+    let expected = strict.quote(r).unwrap();
+    assert_eq!(
+        (q.expected_output, q.price),
+        (expected.expected_output, expected.price)
+    );
+}
+
+#[tokio::test]
 async fn clock_only_expiry_and_stale_oracles_do_not_reuse_prepared_liquidity() {
     let (mut v, mut cache) = captured("sol-locked-468615258.bin.gz", 0).await;
     let s = v.state().unwrap();
@@ -272,7 +314,9 @@ async fn clock_only_expiry_and_stale_oracles_do_not_reuse_prepared_liquidity() {
         .as_mut()
         .unwrap()
         .data = bincode::serialize(&clock).unwrap();
-    let _ = v.update_state(&cache).await;
+    v.update_state(&cache).await.unwrap();
+    assert!(v.initialized());
+    assert!(!v.uses_midpoint_approximation());
     assert!(
         v.quote(r).is_err(),
         "expired splines must not retain a quote"
@@ -384,6 +428,27 @@ fn check_chord(a: &QuoteResult, b: &QuoteResult) {
 async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64, captured: bool) {
     let mut v = decoded(cache, key).await;
     v.load_reference_oracle(cache).await.unwrap();
+    // Full-market exits are a separate quote domain outside routed bounds.
+    // Include them explicitly, even when the partial routing range is absent.
+    let r = request(&v, false, v.state().unwrap().actual_supply);
+    let q = v.quote(r.clone());
+    let e = v.reference_quote(&r);
+    println!(
+        "MIDPOINT_FULL_EXIT {}",
+        serde_json::json!({
+            "case":label, "input":r.amount,
+            "quoted":q.as_ref().ok().map(|q| q.expected_output),
+            "actual":e.as_ref().ok().map(|e| e.output),
+            "quote_error":q.as_ref().err().map(ToString::to_string),
+            "execution_error":e.as_ref().err().map(ToString::to_string),
+        })
+    );
+    if captured {
+        assert!(q.unwrap().expected_output <= e.unwrap().output);
+    }
+    if std::env::var("MIDPOINT_FULL_EXITS_ONLY").is_ok_and(|v| v == "1") {
+        return;
+    }
     for mint in [true, false] {
         let Ok((lo, hi)) = v.bounds(u8::from(!mint), u8::from(mint)) else {
             println!(

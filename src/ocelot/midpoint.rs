@@ -37,11 +37,11 @@ pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
     let sum = bid as u128 + ask as u128;
     let sell_mid = (sum / 2) as u64;
     let buy_mid = sum.div_ceil(2) as u64;
-    let sell = Arc::new(recenter(s, key, sell_mid)?);
+    let sell = Arc::new(recenter(s, key, sell_mid)?.with_full_exit_price_bounds(bid, ask));
     let buy = if buy_mid == sell_mid {
         sell.clone()
     } else {
-        Arc::new(recenter(s, key, buy_mid)?)
+        Arc::new(recenter(s, key, buy_mid)?.with_full_exit_price_bounds(bid, ask))
     };
     log::debug!(
         "Ocelot midpoint approximation: market={} bid={bid} ask={ask} output_discount_bps={OUTPUT_DISCOUNT_BPS}",

@@ -6,6 +6,29 @@ price, ranges and instructions are unchanged. No Hawkeye, local VM or RPC runs
 in preparation or quoting; research-only experiments are excluded from this
 standalone package. This is submitted for engineering review, not activation.
 
+## Full-exit review follow-up
+
+The complete-close withdrawal reserve now uses the more favorable of original
+raw-book and model prices. This fixes the reproduced SOL2S throttle false accepts
+without changing quote curves, the five-bp adjustment, ordinary routing ranges,
+instruction generation or the accepted crossing policy. Only exact full-market
+redemptions can newly decline when capacity is below the favorable-price reserve;
+this includes some conservative declines if actual execution would fit.
+
+Both regressions fail on `0581d19` and pass now. All 12 recorded unthrottled
+full-exit quote outputs are unchanged, and sufficient-capacity controls execute.
+Another 1,032 partial quote/price comparisons and a 64,716-record normal baseline
+match exactly. Clock-only expiry must refresh successfully, with a dedicated
+midpoint-to-normal pricing transition test. Source checks pass 71 reference,
+44 default and 40 shared tests plus both Clippy configurations and formatting.
+
+Earlier dense sweeps covered advertised routing ranges, excluding full-market
+exits. Those are now separate records in both sweep modes. Added full-exit-only
+runs execute 4 captured and 56 controlled exits without failures; 12 controlled
+quotes remain above execution (worst 43.7741 bp), within the disclosed approximation
+policy rather than a new price correction. See [review evidence](MIDPOINT_VALIDATION.md#review-follow-up-full-market-exit-capacity)
+and [full-exit measurements](FULL_EXIT_MEASUREMENTS.json).
+
 ## Implementation
 
 - `update_state` reads one supplied account batch. Normal geometry retains the
@@ -62,11 +85,12 @@ See [policy, examples and reproduction](MIDPOINT_VALIDATION.md),
    0.5% user slippage and a result below that floor after Ocelot succeeds.
    Our test-only guard is not Titan's production guard.
 4. Confirm quote/error and refresh-budget acceptance on production hardware.
-   Local quote medians are about 0.11–0.12 µs; full cached refresh medians are
+   Prior local quote medians are about 0.11–0.12 µs; full cached refresh medians are
    1.34–1.89 ms, p99 up to 3.67 ms. Quote p99 measures batches, not individual calls.
 
-The source suite passes 67 reference, 42 default, 40 unchanged shared and three
-program/parity checks. The route guard exercises 144 successes and 96 atomic
+The source suite passes 71 reference, 44 default and 40 unchanged shared checks.
+The prior three program/parity checks and SBF identities remain applicable;
+program sources are unchanged and were not rebuilt for this follow-up. The route guard exercises 144 successes and 96 atomic
 rollbacks across normal/locked/crossed fixtures. Timestamp-only tests give 32
 +21-second successes and 16 expired controls; fixed slots do not establish
 liquidity survival after wallet signing. Shared old-VM execution tests are not

@@ -36,6 +36,52 @@ not Titan acceptance, routing activation or an on-chain program change.
 default to false. `uses_midpoint_approximation()` exposes the current prepared
 mode for diagnostics, without allowing callers to mutate it.
 
+## Review follow-up: full-market exit capacity
+
+The full-exit withdrawal reserve now uses the more favorable of the original
+raw book and the prepared model (higher bid / lower ask, retaining FIFO bounds).
+Only the two prices used to bound a complete close's collateral are changed.
+Prepared curves, modeled fills, partial-exit checks, output/price scaling, the
+five-bp discount, routing bounds and on-chain instructions are unchanged. No new
+crossing cutoff, adaptive discount or blanket rejection is introduced.
+
+This closes a reproduced SOL2S false accept: on the crossed capture with the
+best-ask maker shifted down by 8 or 32 additional ticks, a capacity equal to the
+old model reserve allowed a quote but execution failed `WithdrawRateLimited`.
+The original capture already crosses by one tick; these shifts are not the total
+crossing width. Corrected reserves increase from 210.242221 to 210.507221 USDC and
+from 210.878221 to 211.779221 USDC. Both insufficient-capacity cases now decline;
+controls at the corrected reserve execute with exactly the original quote.
+
+A full exit here redeems **all outstanding market shares**, not merely one
+holder's balance. It is directly quotable outside the advertised partial routing
+range. A capacity between actual withdrawal and this optimistic best-price
+reserve can conservatively decline even if a particular execution would fit;
+that localized availability tradeoff is inherent in reserving for a better fill.
+No extra reserve is applied to normal routing sizes. Model-based risk/capacity
+limitations elsewhere, including the accepted wider-crossing price errors,
+remain part of the stated approximation policy.
+
+The new full-exit regressions fail against `0581d19` and pass with this fix.
+Twelve unthrottled full exits preserve their previously recorded quoted outputs,
+including the known SOL3L overquotes at wider crossings. Tight/sufficient throttle
+controls also preserve both routing bounds and 1,032 sampled mint/partial-redeem
+outputs and prices. The independent normal-book baseline from `035781b7` is now
+a durable SHA-256 regression over 64,716 output records and 487 instructions;
+it compares against historical output rather than another factory in the same
+venue implementation. Clock-only expiry must refresh successfully, and a separate
+case must transition from midpoint to normal quoting when one maker expires.
+
+Added full-exit-only runs: 4 original-capture and 56 controlled exits all quote
+and execute. The controlled run retains 12 overquotes (worst 43.7741 bp), consistent
+with the existing approximation policy; it has zero execution failures.
+[Full-exit measurements](FULL_EXIT_MEASUREMENTS.json) record each result.
+
+Both sweep modes now emit separate `MIDPOINT_FULL_EXIT` records outside the
+continuous routing domain. The earlier 188,680/52,136 counts and measurements
+below cover advertised ranges only and remain historical evidence; their absence
+of execution failures does not cover full exits or constrained throttles.
+
 ## Known limitation: this is not a universal underquote guarantee
 
 The common-midpoint model is not Phoenix's slide-price calculation. The five-bp
@@ -74,12 +120,14 @@ repeat refreshes, normal/locked/crossed transitions, missing/malformed or stale
 state rejection and clock-only expiry. Unknown makers do not gain liquidity by
 passing through midpoint preparation.
 
-- 67 reference-feature tests pass under `release-debug` with allocation guards.
+- 71 reference-feature tests pass under `release-debug` with allocation guards.
   Expensive research/live/benchmark cases are explicitly excluded from this
   selection and reported separately.
-- 42 default-feature tests pass; four benchmarks remain ignored.
-- Three program host/enum parity tests pass. Program sources and SBF artifacts
-  are unchanged; no rebuild or deployed upgrade is claimed.
+- 44 default-feature tests pass; four benchmarks remain ignored.
+- The prior three program host/enum parity checks and SBF identities remain
+  applicable: program sources and artifacts are unchanged. These checks and the
+  performance benchmark were not repeated for this capacity-only change; no
+  rebuild or deployed upgrade is claimed.
 - Routed slippage/deadline tests now include both tokens on both real locked and
   crossed captures, alongside the four earlier normal captures. The local test
   guard verifies 144 successful routes and 96 atomic rollbacks after successful
@@ -89,9 +137,10 @@ passing through midpoint preparation.
 
 ### Original captured books and shared checks
 
-The dense production-provider sweep compares **188,680** actual issuer executions
+The original pre-capacity-fix production-provider sweep compares **188,680** actual issuer executions
 on the unmodified locked/crossed SOL captures, across both markets and both trade
-directions. Every lot edge (before/at/after), interiors, range endpoints and
+directions within advertised routing bounds, excluding exact full-market exits.
+Every lot edge (before/at/after), interiors, range endpoints and
 additional fixed/random amounts pass: zero overquotes, execution failures or
 range holes. Maximum observed underquote is 15.8219 bp, including the five-bp
 policy discount; this is a fixture result, not a universal bound.
@@ -105,8 +154,9 @@ skipped test is counted as a pass. Both Clippy configurations and formatting pas
 
 ### Controlled production-provider sweep
 
-Four historical fixtures; one maker moved to lock and then cross in each
-direction. Every lot boundary's preceding/at/following atom and an interior point
+Original pre-capacity-fix study: four historical fixtures; one maker moved to
+lock and then cross in each direction. These records cover advertised routing
+bounds, excluding exact full-market exits. Every lot boundary's preceding/at/following atom and an interior point
 are checked for curve shape and holes; executions sample every 64th lot, range
 ends, fixed ticket sizes and deterministic random inputs.
 
@@ -153,7 +203,9 @@ results, commands and unchanged router/guard artifact hashes.
 Run from the standalone package root (or `packages/titan-integration`):
 
 ```sh
-cargo +1.96.0 test --profile release-debug --locked --features reference-simulation --test ocelot_midpoint
+cargo +1.96.0 test --profile release-debug --locked --features reference-simulation --test ocelot_midpoint --test ocelot_full_exit --test ocelot_quote_regression
+# Full-market exits only; repeat with MIDPOINT_SWEEP=controlled for stress states.
+MIDPOINT_FULL_EXITS_ONLY=1 cargo +1.96.0 test --profile release-debug --locked --features reference-simulation --test ocelot_midpoint production_execution_sweep -- --ignored --nocapture
 # Dense default-provider replays on the original locked/crossed captures.
 cargo +1.96.0 test --release --locked --features reference-simulation --test ocelot_midpoint production_execution_sweep -- --ignored --nocapture
 # Explicit stress study: reports known overquotes, not an assertion of universal safety.

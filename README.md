@@ -7,6 +7,10 @@ down for sells, then return `floor(curve_output * 9995 / 10000)` with the margin
 price scaled by the same factor. The extra discount is not applied to normal
 books and is not an additional on-chain fee.
 
+Full-market exits reserve withdrawal capacity using favorable original-book
+prices as well as model prices; this does not change curve pricing or the five-bp
+discount. See the [capacity review follow-up](MIDPOINT_VALIDATION.md#review-follow-up-full-market-exit-capacity).
+
 Both preparation and quoting use Titan's supplied cached accounts. Quotes perform
 no network calls, VM execution or allocations. Hawkeye research is not part of
 the runtime. The default library still has no LiteSVM dependency.
