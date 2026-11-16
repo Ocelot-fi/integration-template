@@ -1,5 +1,40 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## Worst-mid pricing in the adapter, 16 November 2026
+
+Source `f14135fc3bac75bd1aaeac3e744489b83e7e7816` promotes the worst-mid prototype into the production adapter.
+For raw locked/crossed books, buys use the highest live maker midpoint and sells
+the lowest; the extra 5 bp output/price discount is removed entirely. Normal-book
+pricing, the ordinary lot-boundary curve and original-price full-exit reserves
+remain. Cache/strict-decoding fixes are retained.
+
+82 reference / 51 default tests and 40 shared shape/construction checks pass.
+Captured and controlled sweeps cover 2,893,312 quote/shape inputs and 16,440 sampled
+execution comparisons plus 60 full exits with zero overquotes or execution
+failures, through 32-tick controlled crossings. Worst sampled underquote is
+14.5070 bp on captures / 111.5274 bp on constructed stress states. See
+[current policy, sampling and timing](WORST_MID_VALIDATION.md).
+
+The old common-midpoint/five-bp policy is superseded, not another active mode.
+No on-chain source, instruction encoding, deployment or routing activation is
+included. Titan's sampler cache confirmation and host acceptance remain open.
+
+Standalone focused checks pass 34 reference / 22 default tests, both selected
+Clippy configurations and formatting. Shared test binaries compile. All 95
+byte-identical source/export hashes match and public-file screening passes.
+The public runtime contains `live_mid_bounds()` selection and no
+`OUTPUT_DISCOUNT_BPS` constant or quote discount branch.
+
+Local worst-mid quote batch-mean p50 is 0.113–0.123 µs; refresh p50 is 1.741–1.819
+ms. See the validation document for sampling and tail metrics. The normal-book
+64,716-record quote/instruction baseline is unchanged. On-chain source/artifacts
+were not changed or rebuilt. The earlier live Raydium compatibility run remains
+historical evidence; current worst-mid validation uses Phoenix replay fixtures.
+
+
+## Prior handoff evidence
+
+
 ## Strict RPC decoding, 16 November 2026
 
 Source `bf39c48a30e2e0db5213d79c9b4ce109b5aaa74b` rejects unreadable non-null RPC accounts before publishing a

@@ -1,8 +1,7 @@
 //! Native issuer arithmetic. No VM, RPC, account decoding or heap allocation.
 //!
-//! Normal-book providers supply a conservative execution model. The explicitly
-//! selected midpoint fallback is approximate and can overquote stressed crossed
-//! states despite its output discount. See MIDPOINT_VALIDATION.md.
+//! Normal books use the native execution model; locked/crossed books use the
+//! side-specific worst-mid model. Validation scope: WORST_MID_VALIDATION.md.
 use super::{
     State,
     codec::{Result, invalid},
@@ -17,8 +16,8 @@ pub trait PhoenixQuoteFactory: Send + Sync {
 /// Immutable native matcher bound to exactly one State by its factory.
 /// Implementations must be allocation-free and must not simulate or do I/O.
 pub trait PhoenixQuoter: Send + Sync {
-    /// Enables the additional five-bp final-output discount for the explicit
-    /// midpoint policy. This does not certify executable output or capacity.
+    /// Identifies the locked/crossed worst-mid path for diagnostics.
+    /// This flag does not apply an output discount or certify capacity.
     fn is_midpoint_approximation(&self) -> bool {
         false
     }

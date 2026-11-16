@@ -1,32 +1,27 @@
-# Native quoting implementation, updated 14 November 2026
+# Native quoting implementation, updated 16 November 2026
 
-**16 November review follow-up:** shared quote/simulation comparisons now use a
-pinned snapshot, the RPC cache rejects backwards slots and publishes atomically,
-and account discovery no longer depends on sample order sizing. See
-[validation and partner-confirmation limits](CACHE_VALIDATION.md#review-follow-up-pinned-simulations-and-complete-discovery).
+The default locked/crossed-book path now uses **side-specific worst-mid pricing**:
+highest live maker midpoint for buys, lowest for sells, with **no extra 5 bp
+output discount**. Normal books retain the native provider. The existing
+lot-boundary curve, risk/withdrawal checks and original-price full-exit capacity
+reserves remain active. `quote` is allocation-free with no RPC or VM execution.
 
-**16 November cache follow-up:** discovery now batches the trader, index,
-position buffer and withdrawal queue with the clock/configuration. The template's
-RPC cache refreshes every requested account from one response rather than reusing
-discovery-era values. Pricing and the five-bp midpoint policy are unchanged;
-worst-mid remains a separate proposed change. See [cache validation](CACHE_VALIDATION.md).
+[Current implementation and evidence](WORST_MID_VALIDATION.md) supersede the prior
+[common-midpoint/five-bp policy](MIDPOINT_VALIDATION.md). Existing captured and
+constructed execution tests now require zero overquotes and zero failures; this
+is sampled validation, not a universal proof of Phoenix slide behavior. Titan
+must review the pricing policy and host/router integration before activation.
+Unsupported configurations still decline; ANT remains outside validated scope.
 
-`update_state()` prepares the bundled native provider from the supplied account
-snapshot. Normal books retain the conservative curve; locked/crossed books use
-an explicit common-midpoint approximation with an additional five-bp final-output
-discount. Half-tick midpoints round up for buys and down for sells. `quote()`
-remains allocation-free and performs no RPC or VM execution.
+The account batch, pinned snapshot and strict-decoding fixes remain included.
+See [cache validation](CACHE_VALIDATION.md). Titan's sampler cache implementation
+remains unconfirmed. No on-chain program or instruction encoding changed.
 
-**The fallback can overquote constructed crossed states even after the discount.**
-It is not covered by the earlier conservative-provider correctness sign-off.
-The retained raw-model check does not compare against Phoenix's true slide prices.
-Titan must review the stated error policy and route-level minimum behavior before
-activation. See [current implementation and evidence](MIDPOINT_VALIDATION.md).
-Unsupported configurations still decline; ANT is not enabled by this change.
+## Historical checkpoints
 
-The dated sections below preserve historical review and export checkpoints.
-Their older locked/crossed rejection policy is superseded by the explicit policy
-above. No deployed Ocelot program or instruction encoding changes.
+The dated sections below preserve earlier review/export evidence. Their earlier
+locked/crossed rejection or discounted common-midpoint policies are superseded
+by the worst-mid implementation above.
 
 ## Conservative curve update, 12 November
 

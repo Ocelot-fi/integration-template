@@ -1,4 +1,8 @@
-# Native midpoint policy, 14 November 2026
+# Historical common-midpoint policy, 14 November 2026
+
+**Superseded on 16 November by [worst-mid pricing](WORST_MID_VALIDATION.md).**
+The common midpoint and five-bp discount described below are no longer active.
+The original evidence and counterexamples are retained as history.
 
 This implements the selected five-bp **final-output** discount for raw
 locked/crossed Phoenix spline books. It is a native production-adapter path for

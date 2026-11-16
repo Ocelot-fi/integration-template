@@ -1,5 +1,5 @@
-//! Explicit approximation for raw locked/crossed Phoenix spline books.
-//! The five-bp output discount is policy, NOT a proven execution-output bound.
+//! Side-specific worst-mid model for raw locked/crossed Phoenix spline books.
+//! No extra output haircut; the ordinary lot-boundary curve remains in use.
 //! See MIDPOINT_VALIDATION.md. Normal books retain the native provider.
 use super::{
     PHOENIX, State,
@@ -11,8 +11,6 @@ use super::{
 };
 use solana_pubkey::Pubkey;
 use std::sync::Arc;
-
-pub const OUTPUT_DISCOUNT_BPS: u64 = 5;
 
 pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
     let key = Pubkey::find_program_address(&[b"spline", s.config.book.as_ref()], &PHOENIX).0;
@@ -34,9 +32,11 @@ pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
     if bid < ask {
         return Ok(Arc::new(NativePhoenix::prepare(s)?));
     }
-    let sum = bid as u128 + ask as u128;
-    let sell_mid = (sum / 2) as u64;
-    let buy_mid = sum.div_ceil(2) as u64;
+    // Use extrema from the validated raw parser, before risk/capacity limits.
+    // A maker with live liquidity on either side contributes its midpoint.
+    let (sell_mid, buy_mid) = raw
+        .live_mid_bounds()
+        .ok_or(invalid("locked spline book has no live maker midpoint"))?;
     let sell = Arc::new(recenter(s, key, sell_mid)?.with_full_exit_price_bounds(bid, ask));
     let buy = if buy_mid == sell_mid {
         sell.clone()
@@ -44,7 +44,7 @@ pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
         Arc::new(recenter(s, key, buy_mid)?.with_full_exit_price_bounds(bid, ask))
     };
     log::debug!(
-        "Ocelot midpoint approximation: market={} bid={bid} ask={ask} output_discount_bps={OUTPUT_DISCOUNT_BPS}",
+        "Ocelot worst-mid model: market={} bid={bid} ask={ask} buy_mid={buy_mid} sell_mid={sell_mid}",
         s.config.market
     );
     Ok(Arc::new(MidpointPhoenix {

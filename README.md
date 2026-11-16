@@ -1,51 +1,32 @@
 # Ocelot native issuer integration for Titan
 
-**16 November decoding follow-up:** unreadable RPC account data rejects the
-whole refresh; only actual RPC nulls count as absent accounts. This prevents a
-corrupt optional withdrawal-limit account from being treated as unlimited.
-[Validation and scope](CACHE_VALIDATION.md#strict-account-decoding).
+**16 November: worst-mid pricing is now in the production adapter.** On raw
+locked/crossed books, buys use the highest live maker midpoint and sells use the
+lowest. There is **no additional 5 bp output discount**. Normal-book pricing and
+the ordinary conservative lot-boundary output curve are retained.
 
-The bundled `RpcClientCache` is for tooling. Fetches sharing one instance run
-serially, and a single-account miss replaces its latest batch; retained snapshots
-remain immutable and make no network calls. Titan supplies its production cache.
+The validated spline parser selects active, nonzero-mid makers with at least one
+unfilled, unexpired region on either side, before applying maker risk limits.
+Widths, offsets, fills and expiry stay intact when preparing each side's model.
+Native risk, fees, withdrawal checks, full-exit original-price reserves and the
+router's existing bounds remain active. Original account data is preserved.
 
-**16 November review follow-up:** shared simulations now pin quote accounts and
-clock together; RPC snapshots enforce nondecreasing slots and atomic publication.
-Discovery no longer depends on a sample order sizing successfully. 78 reference /
-48 default / 40 shared shape checks pass; live Raydium replay remains unrun.
-Pricing and the five-bp midpoint policy are unchanged. [Evidence and remaining
-Titan cache confirmation](CACHE_VALIDATION.md#review-follow-up-pinned-simulations-and-complete-discovery).
+See [implementation and validation](WORST_MID_VALIDATION.md). The earlier
+[common-midpoint/five-bp policy](MIDPOINT_VALIDATION.md) is historical. Its known
+overquote examples are now regression cases that must quote below actual output
+and execute successfully. Sampled comparisons do not prove every possible state.
 
-**16 November:** batched discovery and coherent full-batch RPC reads fix cache
-version mixing during refresh. Quote curves and the current five-bp midpoint
-policy are unchanged. [Scope and regression evidence](CACHE_VALIDATION.md).
+`update_state` prepares the model from Titan's supplied account snapshot;
+`quote` does no network calls, VM execution or allocation. Hawkeye is not used.
+The cache/snapshot/strict-decoding fixes remain included; see
+[cache validation](CACHE_VALIDATION.md). The bundled RPC cache is tooling and
+serializes fetches per instance; Titan supplies its production cache.
 
-**14 November: native midpoint fallback with a five-bp output discount.**
-Normal books keep the existing conservative curve. Raw locked/crossed books
-prepare a common-midpoint approximation, rounding the midpoint up for buys and
-down for sells, then return `floor(curve_output * 9995 / 10000)` with the marginal
-price scaled by the same factor. The extra discount is not applied to normal
-books and is not an additional on-chain fee.
-
-Full-market exits reserve withdrawal capacity using favorable original-book
-prices as well as model prices; this does not change curve pricing or the five-bp
-discount. See the [capacity review follow-up](MIDPOINT_VALIDATION.md#review-follow-up-full-market-exit-capacity).
-
-Both preparation and quoting use Titan's supplied cached accounts. Quotes perform
-no network calls, VM execution or allocations. Hawkeye research is not part of
-the runtime. The default library still has no LiteSVM dependency.
-
-**The midpoint policy is approximate, not a guaranteed execution-output bound.**
-Known constructed crossed states still overquote after the five-bp discount.
-Native checks remain active, but their midpoint-based price/capacity estimates
-are not a proof of exact Phoenix slide behavior. Titan's route-level user minimum
-protects execution; it can reject a transaction if actual output is insufficient.
-See [policy, counterexamples and current validation](MIDPOINT_VALIDATION.md).
-
-This update is for Titan engineering review in
+The update is submitted for engineering review in
 [PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
-It is not Titan acceptance or activation. No Ocelot program/ABI changes are
-included. ANT3L/ANT2S remain outside the validated oracle-policy profile.
+Titan sampler-cache confirmation, production integration acceptance and
+activation remain outstanding. ANT3L/ANT2S remain outside the validated oracle
+profile. No on-chain program or instruction-encoding changes are included.
 
 ## Earlier submission history
 

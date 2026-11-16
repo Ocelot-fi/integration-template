@@ -80,33 +80,27 @@ async fn crossed(market: usize, shift: u64) -> (support::Snapshot, OcelotVenue) 
 }
 
 #[tokio::test]
-async fn full_exit_quotes_keep_the_reviewed_curve_and_known_price_errors() {
-    // Outputs independently recorded at 0581d19, before the capacity-only fix.
-    let expected = [
-        [
-            2698236078, 2699237212, 2700238345, 2702240612, 2702344715, 2702344715,
-        ],
-        [
-            209136425, 209189259, 209242091, 209347757, 209393624, 209393624,
-        ],
-    ];
-    for (market, values) in expected.iter().enumerate() {
-        for (shift, expected_output) in [0, 2, 4, 8, 16, 32].into_iter().zip(values) {
+async fn full_exit_worst_mid_bounds_actual_output_and_withdrawal() {
+    for market in 0..2 {
+        for shift in [0, 2, 4, 8, 16, 32] {
             let (cache, mut v) = crossed(market, shift).await;
             v.load_reference_oracle(&cache).await.unwrap();
             let r = request(&v);
             assert!(r.amount > v.bounds(1, 0).unwrap().1);
             let q = v.quote(r.clone()).unwrap();
-            assert_eq!(q.expected_output, *expected_output);
             let e = v.reference_quote(&r).unwrap();
-            if market == 0 && shift >= 8 {
-                assert!(
-                    q.expected_output > e.output,
-                    "retained approximation limitation"
-                );
-            } else {
-                assert!(q.expected_output <= e.output);
-            }
+            assert!(q.expected_output <= e.output);
+            let ix = v
+                .build_with_minimum(&r, ocelot::simulation::USER, q.expected_output)
+                .unwrap();
+            assert_eq!(
+                v.execution_oracle()
+                    .unwrap()
+                    .execute(ix, r.input_mint, r.output_mint, r.amount)
+                    .unwrap()
+                    .output,
+                e.output
+            );
             let s = v.state().unwrap();
             let f = NativePhoenixFactory
                 .prepare(s)
@@ -126,15 +120,11 @@ async fn full_exit_quotes_keep_the_reviewed_curve_and_known_price_errors() {
 
 #[tokio::test]
 async fn full_exit_rejects_insufficient_capacity_without_changing_partial_quotes() {
-    for (shift, old_cap, quoted) in [
-        (8, 210_242_221, 209_347_757),
-        (32, 210_878_221, 209_393_624),
-    ] {
+    for (shift, old_cap) in [(8, 210_242_221), (32, 210_878_221)] {
         let (original, v) = crossed(1, shift).await;
         let s = v.state().unwrap();
         let r = request(&v);
         let original_quote = v.quote(r.clone()).unwrap();
-        assert_eq!(original_quote.expected_output, quoted);
         let f = NativePhoenixFactory
             .prepare(s)
             .unwrap()

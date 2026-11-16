@@ -156,7 +156,7 @@ async fn normal_output_price_bounds_and_instructions_are_unchanged() {
 }
 
 #[tokio::test]
-async fn default_fallback_preserves_accounts_and_scales_output_and_price_once() {
+async fn default_worst_mid_preserves_accounts_and_returns_curve_without_haircut() {
     for file in [
         "sol-locked-468615258.bin.gz",
         "sol-crossed-468615690.bin.gz",
@@ -170,7 +170,23 @@ async fn default_fallback_preserves_accounts_and_scales_output_and_price_once() 
             }
             let k = spline_key(s.config.book);
             let raw = inspect(&s.accounts[&k], s.config.book, s.clock.slot).unwrap();
-            let sum = raw.best_bid().unwrap() as u128 + raw.best_ask().unwrap() as u128;
+            assert!(raw.best_bid().unwrap() >= raw.best_ask().unwrap());
+            // Independently isolate makers with the public geometry parser.
+            let account = &s.accounts[&k];
+            let count = u32::from_le_bytes(account.data[72..76].try_into().unwrap()) as usize;
+            let mids: Vec<_> = (0..count)
+                .filter_map(|i| {
+                    let mut isolated = account.clone();
+                    for j in 0..count {
+                        if j != i {
+                            isolated.data[112 + j * 1336 + 32] = 0;
+                        }
+                    }
+                    let depth = inspect(&isolated, s.config.book, s.clock.slot).unwrap();
+                    (depth.best_bid().is_some() || depth.best_ask().is_some())
+                        .then(|| u64_at(&account.data, 112 + i * 1336 + 40).unwrap())
+                })
+                .collect();
             for mint in [true, false] {
                 // Independent unbuffered native curve on the explicitly chosen
                 // side's recentered snapshot; venue still holds original state.
@@ -179,7 +195,11 @@ async fn default_fallback_preserves_accounts_and_scales_output_and_price_once() 
                 } else {
                     s.position.base < 0
                 };
-                let mid = if buy { sum.div_ceil(2) } else { sum / 2 } as u64;
+                let mid = if buy {
+                    *mids.iter().max().unwrap()
+                } else {
+                    *mids.iter().min().unwrap()
+                };
                 let mut model = s.clone();
                 let d = &mut model.accounts.get_mut(&k).unwrap().data;
                 let n = u32::from_le_bytes(d[72..76].try_into().unwrap()) as usize;
@@ -195,11 +215,8 @@ async fn default_fallback_preserves_accounts_and_scales_output_and_price_once() 
                     let q = assert_no_alloc::assert_no_alloc(|| v.quote(request(&v, mint, amount)))
                         .unwrap();
                     let original = native.curve(mint).unwrap().quote(amount).unwrap();
-                    assert_eq!(
-                        q.expected_output,
-                        (original.amount as u128 * 9995 / 10000) as u64
-                    );
-                    assert_eq!(q.price, original.price * 0.9995);
+                    assert_eq!(q.expected_output, original.amount);
+                    assert_eq!(q.price, original.price);
                 }
             }
         }
@@ -207,7 +224,7 @@ async fn default_fallback_preserves_accounts_and_scales_output_and_price_once() 
 }
 
 #[tokio::test]
-async fn refresh_transitions_remove_discount_and_failed_refresh_clears_state() {
+async fn refresh_transitions_restore_native_and_failed_refresh_clears_state() {
     for (file, market) in FIXTURES {
         let key = market.parse().unwrap();
         let normal = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
@@ -247,7 +264,7 @@ async fn refresh_transitions_remove_discount_and_failed_refresh_clears_state() {
 }
 
 #[tokio::test]
-async fn clock_only_expiry_restores_normal_quotes_without_the_extra_discount() {
+async fn clock_only_expiry_restores_normal_quotes() {
     let (mut v, mut cache) = captured("sol-locked-468615258.bin.gz", 0).await;
     let s = v.state().unwrap();
     let k = spline_key(s.config.book);
@@ -339,7 +356,7 @@ async fn clock_only_expiry_and_stale_oracles_do_not_reuse_prepared_liquidity() {
 
 #[cfg(feature = "reference-simulation")]
 #[tokio::test]
-async fn captured_outputs_and_known_policy_limitations_match_execution() {
+async fn captured_outputs_and_former_common_mid_overquotes_are_bounded() {
     for file in [
         "sol-locked-468615258.bin.gz",
         "sol-crossed-468615690.bin.gz",
@@ -368,8 +385,8 @@ async fn captured_outputs_and_known_policy_limitations_match_execution() {
             }
         }
     }
-    // Do NOT turn these known approximation errors into passing safety claims.
-    for (index, width, amount, expected, actual) in [
+    // Keep former common-midpoint counterexamples as execution regressions.
+    for (index, width, amount, old_quote, actual) in [
         (2, 1, 406_715_349, 0, 429_724_357),
         (0, 4, 346_554_022, 320_644_986, 320_592_122),
         (2, 8, 480_611_111, 507_192_066, 506_741_449),
@@ -390,24 +407,24 @@ async fn captured_outputs_and_known_policy_limitations_match_execution() {
         let q = v.quote(r.clone()).unwrap();
         let e = v.reference_quote(&r).unwrap();
         assert_eq!(e.output, actual);
-        if width == 1 {
-            assert!(q.expected_output <= e.output, "buy midpoint rounds up");
-        } else {
-            assert_eq!(q.expected_output, expected);
-            assert!(
-                q.expected_output > e.output,
-                "five bps is not a universal output bound"
-            );
-            let ix = v
-                .build_with_minimum(&r, ocelot::simulation::USER, q.expected_output)
-                .unwrap();
-            assert!(
-                v.execution_oracle()
-                    .unwrap()
-                    .execute(ix, r.input_mint, r.output_mint, r.amount)
-                    .is_err()
-            );
+        assert!(
+            q.expected_output <= e.output,
+            "worst-mid must bound these former failures"
+        );
+        if old_quote != 0 {
+            assert!(old_quote > actual);
         }
+        let ix = v
+            .build_with_minimum(&r, ocelot::simulation::USER, q.expected_output)
+            .unwrap();
+        assert_eq!(
+            v.execution_oracle()
+                .unwrap()
+                .execute(ix, r.input_mint, r.output_mint, r.amount)
+                .unwrap()
+                .output,
+            actual
+        );
     }
 }
 
@@ -425,7 +442,7 @@ fn check_chord(a: &QuoteResult, b: &QuoteResult) {
 }
 
 #[cfg(feature = "reference-simulation")]
-async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64, captured: bool) {
+async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64) {
     let mut v = decoded(cache, key).await;
     v.load_reference_oracle(cache).await.unwrap();
     // Full-market exits are a separate quote domain outside routed bounds.
@@ -443,9 +460,7 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64,
             "execution_error":e.as_ref().err().map(ToString::to_string),
         })
     );
-    if captured {
-        assert!(q.unwrap().expected_output <= e.unwrap().output);
-    }
+    assert!(q.unwrap().expected_output <= e.unwrap().output);
     if std::env::var("MIDPOINT_FULL_EXITS_ONLY").is_ok_and(|v| v == "1") {
         return;
     }
@@ -556,17 +571,22 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64,
             serde_json::json!({"case":label,"mint":mint,"lo":lo,"hi":hi,"stride":stride,"quotes":quotes,"comparisons":comparisons,"overquotes":over,"execution_failures":failures,"range_holes":holes,"max_over_bps":max_over,"max_under_bps":max_under,"worst":worst})
         );
         assert_eq!(holes, 0);
-        if captured {
-            assert_eq!((over, failures), (0, 0), "captured-state regression");
-        }
+        assert_eq!((over, failures), (0, 0), "worst-mid execution regression");
     }
 }
 
 #[cfg(feature = "reference-simulation")]
 #[tokio::test]
-#[ignore = "explicit production-provider execution sweep; controlled states report known quote errors"]
+#[ignore = "explicit worst-mid execution sweep; captured and controlled states must not overquote"]
 async fn production_execution_sweep() {
     let controlled = std::env::var("MIDPOINT_SWEEP").is_ok_and(|x| x == "controlled");
+    // Execution sampling can be reduced explicitly; all lot-edge/chord checks
+    // and zero-overquote/failure assertions remain mandatory.
+    let stride = std::env::var("MIDPOINT_EXECUTION_STRIDE")
+        .ok()
+        .map(|s| s.parse::<u64>().expect("positive execution stride"))
+        .unwrap_or(if controlled { 64 } else { 1 });
+    assert!(stride > 0);
     if !controlled {
         for file in [
             "sol-locked-468615258.bin.gz",
@@ -578,8 +598,7 @@ async fn production_execution_sweep() {
                     &cache,
                     FIXTURES[market].1.parse().unwrap(),
                     &format!("captured/{file}/market={market}"),
-                    1,
-                    true,
+                    stride,
                 )
                 .await;
             }
@@ -602,8 +621,7 @@ async fn production_execution_sweep() {
                         &changed,
                         key,
                         &format!("controlled/{file}/raise={raise}/cross_ticks={width}"),
-                        64,
-                        false,
+                        stride,
                     )
                     .await;
                 }

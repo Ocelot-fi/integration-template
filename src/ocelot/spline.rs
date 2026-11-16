@@ -52,6 +52,8 @@ pub(crate) struct SideLimit {
 #[derive(Debug, Clone)]
 pub struct SplineDepth {
     bids: Vec<Level>,
+    // Extrema of active makers with live unfilled regions, before risk caps.
+    live_mid_bounds: Option<(u64, u64)>,
     asks: Vec<Level>,
     pub maker_risk_inputs: Vec<MakerRiskInputs>,
     /// Future-slot entries are excluded, rather than treating their expiry as GTC.
@@ -89,6 +91,7 @@ impl SplineDepth {
         if active > n || n > (d.len() - HEADER) / SPLINE {
             return Err(invalid("invalid spline count"));
         }
+        let mut live_mid_bounds: Option<(u64, u64)> = None;
         let mut bids = BTreeMap::<u64, u64>::new();
         let mut asks = BTreeMap::<u64, u64>::new();
         let mut maker_risk_inputs = Vec::new();
@@ -116,6 +119,7 @@ impl SplineDepth {
                 return Err(invalid("unsupported spline risk flags"));
             }
             let capacities = limits(&risk, mid)?;
+            let mut live = false;
             for (side, levels) in [(0usize, &mut bids), (1, &mut asks)] {
                 let mut capacity = capacities[side].lots;
                 let mut skip = capacities[side].skip;
@@ -144,6 +148,7 @@ impl SplineDepth {
                     if density == 0 || filled == total || slot > updated.saturating_add(lifespan) {
                         continue;
                     }
+                    live = true;
                     let first_unfilled = first
                         .checked_add(filled / density)
                         .ok_or(invalid("spline offset overflow"))?;
@@ -186,14 +191,25 @@ impl SplineDepth {
                     }
                 }
             }
+            if live {
+                live_mid_bounds = Some(match live_mid_bounds {
+                    Some((low, high)) => (low.min(mid), high.max(mid)),
+                    None => (mid, mid),
+                });
+            }
             maker_risk_inputs.push(risk);
         }
         Ok(Self {
+            live_mid_bounds,
             bids: cumulative(bids.into_iter().rev())?,
             asks: cumulative(asks.into_iter())?,
             maker_risk_inputs,
             excluded_future_splines,
         })
+    }
+
+    pub(crate) fn live_mid_bounds(&self) -> Option<(u64, u64)> {
+        self.live_mid_bounds
     }
 
     pub fn best_bid(&self) -> Option<u64> {
@@ -281,4 +297,78 @@ fn cumulative(levels: impl Iterator<Item = (u64, u64)>) -> Result<Vec<Level>> {
         });
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn put64(d: &mut [u8], offset: usize, value: u64) {
+        d[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[test]
+    fn live_mid_extrema_follow_region_liveness_before_risk_caps() {
+        let book = Pubkey::new_unique();
+        let mut data = vec![0; HEADER + 8 * SPLINE];
+        data[..8].copy_from_slice(&discriminator("account:spline_collection"));
+        data[8..40].copy_from_slice(book.as_ref());
+        data[72..76].copy_from_slice(&8u32.to_le_bytes());
+        data[76..80].copy_from_slice(&7u32.to_le_bytes());
+        // mid, active, update slot, lifespan, filled, density, side
+        for (i, (mid, active, updated, lifespan, filled, density, side)) in [
+            (100, true, 10, 0, 0u32, 1u32, 0),
+            (200, true, 9, 1, 0, 1, 1), // ask-only, exactly at expiry
+            (900, false, 10, 100, 0, 1, 0),
+            (800, true, 10, 100, 1, 1, 0),       // consumed
+            (700, true, 10, 100, 0, 0, 0),       // zero density
+            (600, true, 8, 1, 0, 1, 0),          // expired
+            (500, true, u64::MAX, 100, 0, 1, 0), // saturating future expiry
+            (0, true, 10, 100, 0, 1, 0),         // unset midpoint
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let o = HEADER + i * SPLINE;
+            data[o + 32] = u8::from(active);
+            put64(&mut data, o + 40, mid);
+            put64(&mut data, o + 64, updated);
+            put64(&mut data, o + 104 + side * 8, 1);
+            put64(&mut data, o + 1112 + side * 8, 1);
+            let r = o + 120 + side * 480;
+            put64(&mut data, r + 8, 1);
+            data[r + 16..r + 20].copy_from_slice(&density.to_le_bytes());
+            put64(&mut data, r + 24, u64::from(density));
+            data[r + 32..r + 36].copy_from_slice(&filled.to_le_bytes());
+            put64(&mut data, r + 40, lifespan);
+        }
+        let account = Account {
+            data,
+            owner: PHOENIX,
+            ..Account::default()
+        };
+        let parse = |slot, future, lots| {
+            SplineDepth::with_limits(&account, book, slot, future, |_, _| {
+                Ok([SideLimit { lots, skip: 0 }; 2])
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            parse(10, false, u64::MAX).live_mid_bounds(),
+            Some((100, 200))
+        );
+        assert_eq!(
+            parse(10, true, u64::MAX).live_mid_bounds(),
+            Some((100, 500))
+        );
+        // Geometry determines the extrema even when risk capacity is zero.
+        let capped = parse(10, true, 0);
+        assert_eq!(capped.live_mid_bounds(), Some((100, 500)));
+        assert!(capped.best_bid().is_none() && capped.best_ask().is_none());
+        assert_eq!(parse(11, false, u64::MAX).live_mid_bounds(), None);
+        assert_eq!(
+            parse(11, true, u64::MAX).live_mid_bounds(),
+            Some((500, 500))
+        );
+    }
 }

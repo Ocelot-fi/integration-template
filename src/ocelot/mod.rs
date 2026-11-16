@@ -1,6 +1,6 @@
 //! Ocelot's native issuer venue. Reference execution uses captured program binaries, never a wallet.
 //! Normal books use the conservative spline provider; locked/crossed books use
-//! the explicit discounted midpoint policy. Replay remains opt-in test tooling.
+//! the side-specific worst-mid policy. Replay remains opt-in test tooling.
 pub mod codec;
 pub mod curve;
 #[cfg(feature = "reference-simulation")]
@@ -520,17 +520,10 @@ impl TradingVenue for OcelotVenue {
             // Never hide a broken bound by clipping to the discontinuous curve.
             return Err(invalid("routing curve exceeds native output bound"));
         }
-        let (expected_output, price) = if matcher.is_midpoint_approximation() {
-            let remaining = 10_000 - midpoint::OUTPUT_DISCOUNT_BPS;
-            (
-                (output.amount as u128 * remaining as u128 / 10_000) as u64,
-                output.price * (remaining as f64 / 10_000.0),
-            )
-        } else {
-            (output.amount, output.price)
-        };
+        let expected_output = output.amount;
+        let price = output.price;
         if r.amount != 0 && expected_output == 0 {
-            return Err(invalid("output rounds to zero after midpoint discount"));
+            return Err(invalid("output rounds to zero"));
         }
         Ok(QuoteResult {
             input_mint: r.input_mint,
