@@ -1,5 +1,75 @@
 # Coherent account refresh, 16 November 2026
 
+## Review follow-up: pinned simulations and complete discovery
+
+The first cache fix changed a shared RPC helper without pinning the shared
+simulation harness. Later simulation reads could therefore load newer accounts
+than the venue's quote. This follow-up fixes that compatibility regression rather
+than weakening quote/execution equality assertions.
+
+- `RpcClientCache::snapshot` captures an immutable bank response. Unknown keys
+  error, while accounts known absent in that response return `None`. Snapshot
+  reads never fetch RPC data. The shared boundary/random simulation tests gather
+  quote and instruction dependencies, capture them with the clock, reconstruct
+  the venue from the pinned pool account and refresh it from that same snapshot.
+  Both the simulation loader and clock helper now require `RpcSnapshot` by type.
+- RPC refreshes retain `context.slot`, pass `min_context_slot` and reject backwards
+  responses even if a provider ignores that parameter. A serialized fetch path
+  and atomic replacement of the latest snapshot prevent concurrent publication
+  from assembling mixed generations. Single misses use the same path. Resetting
+  cached accounts preserves the slot floor. Explicit base64+zstd encoding retains
+  the SDK's previous behavior for large accounts. Individual calls may still advance
+  between snapshots; callers needing repeatable reads must retain a snapshot.
+- Ocelot discovers both directions' account metas independently of trade sizing.
+  A synthetic instruction failing to size can no longer silently omit keys.
+  Actual instruction construction uses the same extracted account layout.
+- Required-key errors are propagated only after prepared state is cleared. Warm
+  dependency keys are still collected before clearing, preserving subscriptions.
+
+### Follow-up validation
+
+- 78 selected reference-feature tests and 48 default-feature tests pass; four
+  default benchmark tests remain ignored. Both selected Clippy configurations
+  and formatting pass. The frozen 64,716-record quote/instruction baseline and
+  existing normal/midpoint pricing assertions remain unchanged.
+- 40 shared quote-shape/construction assertions pass against eight fixture/market
+  combinations. Shared simulation preparation changed; assertion bodies did not.
+- The end-to-end regression runs `OcelotVenue::update_state` through the actual
+  RPC cache and an in-process sender advancing its bank slot on every request.
+  A negative control applying the original hit-reuse policy reproduces `invalid
+  withdrawal budget`; fresh cold/warm refreshes succeed with matching clocks and
+  withdrawal queue timestamps. Makers refresh unchanged prices in this mock so
+  liquidity expiry does not confound the cache test.
+- The same test invokes the actual shared-suite snapshot helper, advances the
+  live cache again, and verifies pinned account/clock reads, unchanged quotes,
+  two successful actual-program comparisons, and no additional RPC requests.
+- A controlled index-node relocation with matching buffer references constructs
+  coherent before/after maps. Mixing the old index with the new buffer triggers
+  `orphan active position`, clears quotes, and then recovers on the coherent map
+  with unchanged output. This is parser/refresh regression coverage, not a claim
+  that the constructed relocation represents a particular live Phoenix event.
+- RPC tests verify pinned absence versus unknown keys, nondecreasing slots across
+  cache reset, ordered/duplicate requests, transport/size failures, and concurrent
+  refreshes publishing whole snapshots with no overlapping RPC fetches.
+- The live Raydium suite was compiled but not executed: no `SOLANA_RPC_URL` or
+  Raydium program dumps are available. The offline test exercises its actual
+  generic pinning helper, but is not a live Raydium execution result. A live test
+  must retain the pinned snapshot; passing once with moving reads is insufficient.
+
+### Remaining partner confirmation
+
+Titan has not yet confirmed whether its 300-call sampler used the template's
+`RpcClientCache` or another cache implementation. These changes fix the bundled
+helper and shared harness, and document the production-host coherence contract.
+They do not modify Titan's proprietary cache or establish a new live refusal rate.
+Ask which cache was used and request a rerun on this commit; do not describe the
+reported production incident as independently confirmed resolved.
+
+Pricing, the common-midpoint/five-bp policy, withdrawal guards, transaction bytes
+and on-chain programs are unchanged. Worst-mid remains a separate proposal.
+
+## Initial cache fix (historical; tooling details superseded above)
+
 This follow-up addresses mixed account versions during discovery and in the
 bundled RPC-backed cache. It does not change quote curves, midpoint selection,
 the five-bp output discount, finance/withdrawal guards or transaction instructions.

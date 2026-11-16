@@ -15,6 +15,7 @@
 
 use std::env;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 
 use litesvm::LiteSVM;
@@ -34,7 +35,7 @@ use spl_token::state::{Account as TokenAccount, AccountState};
 use assert_no_alloc::assert_no_alloc;
 
 use titan_integration_template::account_caching::AccountsCache;
-use titan_integration_template::account_caching::rpc_cache::RpcClientCache;
+use titan_integration_template::account_caching::rpc_cache::{RpcClientCache, RpcSnapshot};
 use titan_integration_template::trading_venue::{
     FromAccount, QuoteRequest, SwapType, TradingVenue,
 };
@@ -182,7 +183,7 @@ fn setup_litesvm(programs: &[Pubkey]) -> (LiteSVM, Keypair) {
 
 /// Sync LiteSVM's clock sysvar to the live network so time-dependent venues
 /// quote against the same clock the simulation runs under.
-async fn sync_clock(cache: &RpcClientCache, litesvm: &mut LiteSVM) {
+async fn sync_clock(cache: &RpcSnapshot, litesvm: &mut LiteSVM) {
     let clock_account = cache.get_account(&clock::ID).await.unwrap();
     let clock: Clock = clock_account
         .as_ref()
@@ -193,7 +194,7 @@ async fn sync_clock(cache: &RpcClientCache, litesvm: &mut LiteSVM) {
 }
 
 /// Fetch the pool, build the venue, and bring it to a fully-updated state.
-/// Returns the venue plus the RPC cache it was loaded through (reused for sims).
+/// Returns the venue plus its RPC source for subsequent snapshot capture.
 async fn build_venue<V: SuiteVenue>(rpc_url: String, pool: Pubkey) -> (V, RpcClientCache) {
     let rpc = RpcClient::new(rpc_url);
     let account = rpc
@@ -209,12 +210,62 @@ async fn build_venue<V: SuiteVenue>(rpc_url: String, pool: Pubkey) -> (V, RpcCli
     (venue, cache)
 }
 
+/// Discover both quote and execution accounts, then rebuild the venue against
+/// the immutable response used by every simulation and its clock. Unknown keys
+/// fail instead of reading live state halfway through a comparison.
+pub async fn pin_simulation_state<V: SuiteVenue>(
+    venue: V,
+    cache: &RpcClientCache,
+    user: Pubkey,
+) -> (V, Arc<RpcSnapshot>) {
+    let mut keys = venue.get_required_pubkeys_for_update().unwrap();
+    keys.push(venue.market_id());
+    keys.push(clock::ID);
+    for (input, output) in venue.directions_num() {
+        let (lo, hi) = venue.bounds(input, output).unwrap();
+        for amount in [lo, hi] {
+            let request = exact_in(
+                venue.get_token(input as usize).unwrap().pubkey,
+                venue.get_token(output as usize).unwrap().pubkey,
+                amount,
+            );
+            keys.extend(
+                venue
+                    .generate_swap_instruction(request, user)
+                    .unwrap()
+                    .accounts
+                    .iter()
+                    .map(|a| a.pubkey),
+            );
+        }
+    }
+    keys.sort();
+    keys.dedup();
+    let snapshot = cache
+        .snapshot(&keys)
+        .await
+        .expect("capture simulation snapshot");
+    let pool = venue.market_id();
+    let pool_account = snapshot
+        .get_account(&pool)
+        .await
+        .unwrap()
+        .expect("pinned pool account");
+    let mut venue =
+        V::from_account(&pool, &pool_account).expect("construct venue from pinned pool");
+    venue
+        .update_state(snapshot.as_ref())
+        .await
+        .expect("rebuild venue against simulation snapshot");
+    (venue, snapshot)
+}
+
 /// Execute a swap through the venue's generated instruction inside LiteSVM and
 /// return the realized output amount — the on-chain ground truth to compare a
 /// quote against.
 async fn sim_quote_request(
     venue: &dyn TradingVenue,
-    cache: &dyn AccountsCache,
+    cache: &RpcSnapshot,
     request: QuoteRequest,
     litesvm: &mut LiteSVM,
     keypair: &Keypair,
@@ -382,7 +433,8 @@ pub async fn bound_simulation<V: SuiteVenue>(config: &SuiteConfig) {
     }
     let (venue, cache) = build_venue::<V>(rpc_url, config.pool).await;
     let (mut litesvm, keypair) = setup_litesvm(&config.programs);
-    sync_clock(&cache, &mut litesvm).await;
+    let (venue, snapshot) = pin_simulation_state(venue, &cache, keypair.pubkey()).await;
+    sync_clock(snapshot.as_ref(), &mut litesvm).await;
 
     assert!(venue.get_token_info().len() >= 2);
 
@@ -393,8 +445,14 @@ pub async fn bound_simulation<V: SuiteVenue>(config: &SuiteConfig) {
 
         for bound in [lower, upper] {
             let request = exact_in(input_mint, output_mint, bound);
-            let sim =
-                sim_quote_request(&venue, &cache, request.clone(), &mut litesvm, &keypair).await;
+            let sim = sim_quote_request(
+                &venue,
+                snapshot.as_ref(),
+                request.clone(),
+                &mut litesvm,
+                &keypair,
+            )
+            .await;
             let quote = venue.quote(request).unwrap();
             assert_eq!(
                 quote.expected_output.abs_diff(sim),
@@ -419,7 +477,8 @@ pub async fn random_samples<V: SuiteVenue>(config: &SuiteConfig) {
     }
     let (venue, cache) = build_venue::<V>(rpc_url, config.pool).await;
     let (mut litesvm, keypair) = setup_litesvm(&config.programs);
-    sync_clock(&cache, &mut litesvm).await;
+    let (venue, snapshot) = pin_simulation_state(venue, &cache, keypair.pubkey()).await;
+    sync_clock(snapshot.as_ref(), &mut litesvm).await;
 
     let mut rng = test_rng();
     for (in_idx, out_idx) in venue.directions_num() {
@@ -430,8 +489,14 @@ pub async fn random_samples<V: SuiteVenue>(config: &SuiteConfig) {
         for _ in 0..50 {
             let amount = sample_log_uniform_u64(&mut rng, lb, ub);
             let request = exact_in(input_mint, output_mint, amount);
-            let sim =
-                sim_quote_request(&venue, &cache, request.clone(), &mut litesvm, &keypair).await;
+            let sim = sim_quote_request(
+                &venue,
+                snapshot.as_ref(),
+                request.clone(),
+                &mut litesvm,
+                &keypair,
+            )
+            .await;
             let quote = venue.quote(request).unwrap();
             assert_eq!(
                 quote.expected_output.abs_diff(sim),

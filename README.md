@@ -1,5 +1,12 @@
 # Ocelot native issuer integration for Titan
 
+**16 November review follow-up:** shared simulations now pin quote accounts and
+clock together; RPC snapshots enforce nondecreasing slots and atomic publication.
+Discovery no longer depends on a sample order sizing successfully. 78 reference /
+48 default / 40 shared shape checks pass; live Raydium replay remains unrun.
+Pricing and the five-bp midpoint policy are unchanged. [Evidence and remaining
+Titan cache confirmation](CACHE_VALIDATION.md#review-follow-up-pinned-simulations-and-complete-discovery).
+
 **16 November:** batched discovery and coherent full-batch RPC reads fix cache
 version mixing during refresh. Quote curves and the current five-bp midpoint
 policy are unchanged. [Scope and regression evidence](CACHE_VALIDATION.md).

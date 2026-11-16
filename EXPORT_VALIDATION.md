@@ -1,5 +1,36 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## Cache review follow-up, 16 November 2026
+
+Source `fbdc96b0a8b84cfe0800719a339a20a2ca459b32` fixes the shared simulation harness to pin quote preparation,
+execution accounts and clock to one immutable RPC response. Fresh RPC batches
+retain context slots, reject backwards responses and publish complete snapshots
+atomically. Ocelot discovers instruction accounts independently of trade sizing
+and clears prepared state before propagating required-key failures.
+
+78 selected reference / 48 default tests and 40 shared shape/construction checks
+pass, as do both selected Clippy configurations and formatting. Integrated
+advancing-RPC and controlled orphan-index/buffer regressions pass. The frozen
+64,716-record quote/instruction baseline is unchanged. See
+[scope and evidence](CACHE_VALIDATION.md#review-follow-up-pinned-simulations-and-complete-discovery).
+
+Shared Raydium binaries compile, but live replay is unrun without an RPC URL and
+program dumps. The offline integration test invokes the actual generic snapshot
+helper and replays Ocelot mint/redeem. Titan must confirm which cache its sampler
+used and rerun; no new live refusal rate or production resolution is claimed.
+Normal curves, common-midpoint/five-bp policy and instructions are unchanged.
+Worst-mid remains separate. No on-chain changes or activation.
+
+Standalone focused checks pass 19 reference / 10 default tests (two/one
+benchmark tests respectively remain ignored), both selected Clippy configurations
+and formatting. The shared Raydium/Ocelot binaries compile. All 94 byte-identical
+export hashes match the committed source; only documentation links/references and
+export metadata differ. Public-file screening passes. No live Raydium or new
+latency/availability measurement is claimed.
+
+## Prior handoff evidence
+
+
 ## Cache-coherence follow-up, 16 November 2026
 
 Source `20a9849862e14cabb8d2b9424f289c2a8e734bc8` batches discovery dependencies with the clock and withdrawal

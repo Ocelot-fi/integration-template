@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8",
-  "runtime_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8",
+  "ocelot_source_commit": "fbdc96b0a8b84cfe0800719a339a20a2ca459b32",
+  "runtime_commit": "fbdc96b0a8b84cfe0800719a339a20a2ca459b32",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Cache-coherence follow-up: batch discovery dependencies with clock/withdrawal queue and refresh all RPC batch keys. Quote curves, common-midpoint/five-bp policy and instructions unchanged; worst-mid remains separate. No activation.",
+  "review_scope": "Cache review follow-up: pin shared simulations, retain monotone RPC slots and atomic snapshots, discover accounts independently of sizing, and add end-to-end regressions. Pricing and five-bp policy unchanged; Titan cache confirmation pending. No activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,5 +11,5 @@
   "exported_at": "2026-11-16",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6"
+  "previous_runtime_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8"
 }

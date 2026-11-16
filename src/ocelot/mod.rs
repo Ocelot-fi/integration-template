@@ -268,19 +268,8 @@ impl OcelotVenue {
             .into_iter()
             .collect();
         for mint in [true, false] {
-            let s = self.state()?;
-            let amount = if mint {
-                u64::try_from(s.mark.quote_per_lot.div_ceil(s.market.leverage as u128))
-                    .map_err(|_| invalid("minimum lot overflow"))?
-                    .saturating_mul(2)
-            } else {
-                s.actual_supply
-            };
-            if amount != 0
-                && let Ok(ix) = instruction::build(self, amount, mint, DISCOVERY_USER, 1)
-            {
-                all.extend(ix.accounts.iter().map(|a| a.pubkey));
-            }
+            let (accounts, _) = instruction::accounts(self, mint, DISCOVERY_USER)?;
+            all.extend(accounts.into_iter().map(|a| a.pubkey));
         }
         let synthetic = [
             DISCOVERY_USER,
@@ -441,7 +430,7 @@ impl TradingVenue for OcelotVenue {
         Ok(keys)
     }
     async fn update_state(&mut self, cache: &dyn AccountsCache) -> Result<()> {
-        let mut keys = self.get_required_pubkeys_for_update()?;
+        let keys = self.get_required_pubkeys_for_update();
         self.state = None;
         self.matcher = None;
         self.limits = None;
@@ -449,6 +438,8 @@ impl TradingVenue for OcelotVenue {
         {
             self.simulator = None;
         }
+
+        let mut keys = keys?;
 
         // Discovery may span cache generations. Never publish or quote this state.
         let mut accounts = fetch_accounts(cache, &keys).await?;

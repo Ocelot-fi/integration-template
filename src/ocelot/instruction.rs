@@ -92,22 +92,10 @@ pub fn build(
     user: Pubkey,
     min_output: u64,
 ) -> Result<Instruction> {
-    let s = v.state.as_ref().ok_or(
-        crate::trading_venue::error::TradingVenueError::NotInitialized("Ocelot state".into()),
-    )?;
-    let m = &s.market;
-    let c = &s.config;
-    let ex = &s.exchange;
-    let market = v.pool_id;
+    let s = v.state()?;
     if amount == 0 {
         return Err(invalid("zero input"));
     }
-    let usdc_vault = pda(b"phoenix_usdc_vault", market);
-    let collateral_vault = pda(b"phoenix_collateral_vault", market);
-    let config = pda(b"phoenix", market);
-    let spline = Pubkey::find_program_address(&[b"spline", c.book.as_ref()], &PHOENIX).0;
-    let ember_state = Pubkey::find_program_address(&[PHOENIX.as_ref(), b"state"], &EMBER).0;
-    let ember_vault = Pubkey::find_program_address(&[PHOENIX.as_ref(), b"vault"], &EMBER).0;
     let sizing = super::quote::order(s, amount, mint)?;
     let net = sizing.deposit;
     let order = if !mint && s.position.base == 0 {
@@ -120,6 +108,44 @@ pub fn build(
             sizing.reduce_only,
         )
     };
+    let (accounts, counts) = accounts(v, mint, user)?;
+    Ok(Instruction {
+        program_id: PROGRAM_ID,
+        accounts,
+        data: encode(
+            mint,
+            amount,
+            net,
+            &order,
+            counts,
+            min_output,
+            // The v3 ABI requires a deadline and checks `now <= deadline`.
+            // Titan owns transaction expiry; add no adapter-specific cutoff.
+            i64::MAX,
+            s.revision,
+        ),
+    })
+}
+
+// Account discovery is independent of whether a sample trade can be sized.
+pub(super) fn accounts(
+    v: &OcelotVenue,
+    mint: bool,
+    user: Pubkey,
+) -> Result<(Vec<AccountMeta>, [u8; 3])> {
+    let s = v.state.as_ref().ok_or(
+        crate::trading_venue::error::TradingVenueError::NotInitialized("Ocelot state".into()),
+    )?;
+    let m = &s.market;
+    let c = &s.config;
+    let ex = &s.exchange;
+    let market = v.pool_id;
+    let usdc_vault = pda(b"phoenix_usdc_vault", market);
+    let collateral_vault = pda(b"phoenix_collateral_vault", market);
+    let config = pda(b"phoenix", market);
+    let spline = Pubkey::find_program_address(&[b"spline", c.book.as_ref()], &PHOENIX).0;
+    let ember_state = Pubkey::find_program_address(&[PHOENIX.as_ref(), b"state"], &EMBER).0;
+    let ember_vault = Pubkey::find_program_address(&[PHOENIX.as_ref(), b"vault"], &EMBER).0;
     let mut venue_order = vec![
         ro(PHOENIX),
         ro(PHOENIX_LOG),
@@ -262,20 +288,5 @@ pub fn build(
         b.map_err(|_| invalid("account count overflow"))?,
         c.map_err(|_| invalid("account count overflow"))?,
     ];
-    Ok(Instruction {
-        program_id: PROGRAM_ID,
-        accounts,
-        data: encode(
-            mint,
-            amount,
-            net,
-            &order,
-            counts,
-            min_output,
-            // The v3 ABI requires a deadline and checks `now <= deadline`.
-            // Titan owns transaction expiry; add no adapter-specific cutoff.
-            i64::MAX,
-            s.revision,
-        ),
-    })
+    Ok((accounts, counts))
 }

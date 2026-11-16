@@ -1,5 +1,10 @@
 # Native quoting implementation, updated 14 November 2026
 
+**16 November review follow-up:** shared quote/simulation comparisons now use a
+pinned snapshot, the RPC cache rejects backwards slots and publishes atomically,
+and account discovery no longer depends on sample order sizing. See
+[validation and partner-confirmation limits](CACHE_VALIDATION.md#review-follow-up-pinned-simulations-and-complete-discovery).
+
 **16 November cache follow-up:** discovery now batches the trader, index,
 position buffer and withdrawal queue with the clock/configuration. The template's
 RPC cache refreshes every requested account from one response rather than reusing

@@ -18,15 +18,28 @@ struct Responses {
     fail: bool,
     short: bool,
     batches: Vec<Vec<Pubkey>>,
+    floors: Vec<u64>,
+    in_flight: bool,
 }
 struct Sender(Arc<Mutex<Responses>>);
 #[async_trait]
 impl RpcSender for Sender {
     async fn send(&self, request: RpcRequest, params: Value) -> client_error::Result<Value> {
+        assert_eq!(params[1]["encoding"], "base64+zstd");
+        {
+            let mut state = self.0.lock().unwrap();
+            assert!(!state.in_flight, "RPC fetches must be serialized");
+            state.in_flight = true;
+        }
+        tokio::task::yield_now().await;
         let mut state = self.0.lock().unwrap();
+        state.in_flight = false;
         if state.fail {
             return Err(std::io::Error::other("controlled transport failure").into());
         }
+        state
+            .floors
+            .push(params[1]["minContextSlot"].as_u64().unwrap());
         let value = |key: Pubkey| {
             if state.absent == Some(key) {
                 Value::Null
@@ -82,7 +95,7 @@ async fn final_batch_replaces_discovery_hits_and_preserves_order_and_absence() {
     let keys = [b, a, b];
     let batch = cache.get_accounts(&keys).await.unwrap();
     assert!(batch.iter().all(|a| a.as_ref().unwrap().lamports == 101));
-    assert_eq!(state.lock().unwrap().batches, vec![keys.to_vec()]);
+    assert_eq!(state.lock().unwrap().batches, vec![vec![a], keys.to_vec()]);
     {
         let mut s = state.lock().unwrap();
         s.generation = 102;
@@ -126,4 +139,41 @@ async fn failed_or_invalid_batch_never_returns_old_cached_accounts() {
     assert!(cache.get_accounts(&[key; 101]).await.is_err());
     assert!(cache.get_accounts(&[]).await.unwrap().is_empty());
     assert_eq!(state.lock().unwrap().batches.len(), before);
+}
+
+#[tokio::test]
+async fn pinned_snapshot_survives_refresh_and_slot_regression_is_rejected() {
+    let (mut cache, state) = cache();
+    let a = Pubkey::new_unique();
+    let b = Pubkey::new_unique();
+    state.lock().unwrap().absent = Some(b);
+    let pinned = cache.snapshot(&[a, b]).await.unwrap();
+    state.lock().unwrap().generation = 101;
+    cache.get_accounts(&[a]).await.unwrap();
+    assert_eq!(pinned.slot(), 100);
+    assert_eq!(pinned.get_account(&a).await.unwrap().unwrap().lamports, 100);
+    assert!(pinned.get_account(&b).await.unwrap().is_none());
+    assert!(pinned.get_account(&Pubkey::new_unique()).await.is_err());
+    cache.reset_cache();
+    state.lock().unwrap().generation = 99;
+    assert!(cache.get_accounts(&[a]).await.is_err());
+    assert_eq!(state.lock().unwrap().floors, vec![0, 100, 101]);
+    assert!(cache.get_multiple(&[a])[0].is_none());
+    state.lock().unwrap().generation = 102;
+    cache.get_account(&a).await.unwrap();
+    assert_eq!(state.lock().unwrap().floors.last(), Some(&101));
+}
+
+#[tokio::test]
+async fn concurrent_batches_publish_only_whole_generations() {
+    let (cache, _) = cache();
+    let a = Pubkey::new_unique();
+    let b = Pubkey::new_unique();
+    let a_keys = [a];
+    let b_keys = [b];
+    let (one, two) = tokio::join!(cache.snapshot(&a_keys), cache.snapshot(&b_keys));
+    assert!(one.unwrap().get_account(&a).await.unwrap().is_some());
+    assert!(two.unwrap().get_account(&b).await.unwrap().is_some());
+    let current = cache.get_multiple(&[a, b]);
+    assert_eq!(current.iter().filter(|a| a.is_some()).count(), 1);
 }
