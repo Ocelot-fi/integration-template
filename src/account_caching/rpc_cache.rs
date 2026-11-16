@@ -1,21 +1,10 @@
-//! An RPC-backed account cache for Titan venue state updates.
+//! RPC-backed account access for local integration tests and tooling.
 //!
-//! `RpcClientCache` wraps a `RpcClient` and provides a thread-safe, in-memory
-//! cache of Solana accounts. This accelerates venue state updates by avoiding
-//! redundant RPC calls and ensures consistent account snapshots when integrating
-//! multiple pools and venues.
-//!
-//! The cache implements the `AccountsCache` trait, which is used by Titan's
-//! trading venues during:
-//! - Pool initialization
-//! - State refreshing
-//! - Boundary scanning
-//! - Quoting
-//!
-//! The internal storage uses a `DashMap<Pubkey, Option<Account>>`, making it
-//! both concurrent and lock-free at the application level.
+//! Single-account reads may reuse the cache. Each `get_accounts` call instead
+//! requests the ENTIRE batch from one RPC response, including previously cached
+//! keys and the clock. This prevents discovery reads from poisoning a later
+//! quote snapshot. Titan's production cache is supplied by the integration host.
 
-use ahash::AHashMap;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use solana_account::Account;
@@ -35,7 +24,8 @@ type AccountCache = DashMap<Pubkey, Option<Account>>;
 /// The cache performs the following optimizations:
 ///
 /// - **Single-account fetch**: Cache hits avoid RPC calls entirely.
-/// - **Multi-account fetch**: Groups unknown keys into a single `get_multiple_accounts` RPC call.
+/// - **Multi-account fetch**: Refreshes all requested keys in one RPC call.
+///   Cache hits never replace values from that response.
 /// - **Caching negative lookups**: Accounts that consistently return `None` are also stored.
 /// - **Thread-safe reads/writes** using `DashMap`.
 pub struct RpcClientCache {
@@ -63,7 +53,8 @@ impl RpcClientCache {
     /// - If present in the cache → returned immediately.
     /// - If absent → `None` is returned.
     ///
-    /// This does **not** fetch from RPC; it only reads cached values.
+    /// This does **not** fetch from RPC; it only reads cached values. It is not
+    /// a coherent snapshot API; quote preparation must use `get_accounts`.
     pub fn get_multiple(&self, pubkeys: &[Pubkey]) -> Vec<Option<Account>> {
         let mut result = Vec::with_capacity(pubkeys.len());
         pubkeys.iter().for_each(|key| {
@@ -103,59 +94,43 @@ impl AccountsCache for RpcClientCache {
         Ok(Some(response))
     }
 
-    /// Fetch multiple accounts, using cached values where possible and batching
-    /// missing keys into a single RPC call.
-    ///
-    /// Steps:
-    /// 1. Split pubkeys into cache hits and misses.
-    /// 2. Fetch misses using `get_multiple_accounts`.
-    /// 3. Store results (including `None` values) in cache.
-    /// 4. Return accounts in the same order as `pubkeys`.
+    /// Refresh one complete snapshot, rather than combining cache generations.
+    /// Requests over the RPC's 100-account limit fail; splitting into multiple
+    /// requests would silently lose the same-snapshot guarantee.
     async fn get_accounts(
         &self,
         pubkeys: &[Pubkey],
     ) -> Result<Vec<Option<Account>>, AccountCacheError> {
-        let mut keys = Vec::new();
-        let mut result_map: AHashMap<Pubkey, Option<Account>> = AHashMap::default();
-        let cached_results = self.get_multiple(pubkeys);
-
-        // Identify cache hits and misses
-        cached_results
-            .iter()
-            .zip(pubkeys.iter())
-            .for_each(|(account, pubkey)| {
-                if let Some(res) = account {
-                    // Cached hit
-                    result_map.insert(*pubkey, Some(res.clone()));
-                } else {
-                    // Needs RPC fetch
-                    keys.push(*pubkey);
-                }
-            });
-
-        // Batch RPC call for missing keys
-        if !keys.is_empty() {
-            let response = self
-                .rpc_client
-                .get_multiple_accounts(&keys)
-                .await
-                .map_err(AccountCacheError::FailedToFetchAccount)?;
-
-            // Update map and cache
-            for (pubkey, account) in keys.iter().zip(response.iter()) {
-                result_map.insert(*pubkey, account.clone());
-                self.cache.insert(*pubkey, account.clone());
-            }
+        if pubkeys.is_empty() {
+            return Ok(Vec::new());
         }
-
-        // Reassemble results in original input order
-        let mut result = Vec::new();
-
-        for pubkey in pubkeys {
-            let item = result_map.get(pubkey).unwrap();
-            result.push(item.clone());
+        if pubkeys.len() > 100 {
+            return Err(AccountCacheError::FailedToFetchAccount(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "coherent RPC batch exceeds 100 accounts",
+                )
+                .into(),
+            ));
         }
-
-        Ok(result)
+        let response = self
+            .rpc_client
+            .get_multiple_accounts(pubkeys)
+            .await
+            .map_err(AccountCacheError::FailedToFetchAccount)?;
+        if response.len() != pubkeys.len() {
+            return Err(AccountCacheError::FailedToFetchAccount(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "RPC returned wrong account count",
+                )
+                .into(),
+            ));
+        }
+        for (key, account) in pubkeys.iter().zip(&response) {
+            self.cache.insert(*key, account.clone());
+        }
+        // Return this response directly, not a second read of the mutable cache.
+        Ok(response)
     }
 }

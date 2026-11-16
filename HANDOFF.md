@@ -1,5 +1,28 @@
 # Ocelot integration handoff, 14 November 2026
 
+## Cache-coherence follow-up, 16 November 2026
+
+Source `20a9849862e14cabb8d2b9424f289c2a8e734bc8` batches discovery dependencies with the clock and withdrawal
+queue, and refreshes every RPC batch key instead of reusing earlier cache hits.
+The production host supplies its own coherent AccountsCache; the adapter adds no
+RPC calls and does not require identical last-write slots. Cold discovery uses
+three batch calls; normal warm refreshes use two. The RPC helper fetches one full
+response per batch (maximum 100 accounts) and never falls back to stale hits.
+
+74 selected reference / 46 default tests and both Clippy configurations pass.
+Three new regressions fail before this fix; the frozen 64,716-record quote and
+instruction baseline is unchanged. See [scope and evidence](CACHE_VALIDATION.md).
+The normal curves, common-midpoint/five-bp policy, guards and instructions remain
+unchanged. Worst-mid pricing is a separate proposed update. No activation.
+
+Standalone focused tests pass 15 reference and 8 default cases, with
+both Clippy modes and formatting passing. All 93 unmodified-export files
+match source SHA-256 hashes; documentation link normalization and public screening
+pass. No live refusal-rate or new performance measurement is claimed.
+
+## Prior handoff evidence
+
+
 This update enables native midpoint quotes for locked/crossed Phoenix spline
 books, using the selected five-bp final-output discount. Normal-book output,
 price, ranges and instructions are unchanged. No Hawkeye, local VM or RPC runs

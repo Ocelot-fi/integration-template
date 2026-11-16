@@ -148,6 +148,8 @@ impl FromAccount for OcelotVenue {
         })
     }
 }
+// Program binaries are loaded only by the explicit reference simulator.
+#[cfg(feature = "reference-simulation")]
 async fn required(cache: &dyn AccountsCache, key: Pubkey) -> Result<Account> {
     cache
         .get_account(&key)
@@ -439,7 +441,7 @@ impl TradingVenue for OcelotVenue {
         Ok(keys)
     }
     async fn update_state(&mut self, cache: &dyn AccountsCache) -> Result<()> {
-        let keys = self.get_required_pubkeys_for_update()?;
+        let mut keys = self.get_required_pubkeys_for_update()?;
         self.state = None;
         self.matcher = None;
         self.limits = None;
@@ -459,11 +461,19 @@ impl TradingVenue for OcelotVenue {
         let global = accounts
             .get(&PHOENIX_GLOBAL)
             .ok_or(invalid("missing discovery global"))?;
-        let dependencies = [c.trader, key(&global.data, 392)?, key(&global.data, 424)?];
-        for k in dependencies {
-            if let std::collections::hash_map::Entry::Vacant(entry) = accounts.entry(k) {
-                entry.insert(required(cache, k).await?);
-            }
+        let dependencies = [
+            c.trader,
+            key(&global.data, 392)?,
+            key(&global.data, 424)?,
+            key(&global.data, 472)?, // Withdrawal budget must share the clock snapshot.
+        ];
+        if dependencies.iter().any(|k| !keys.contains(k)) {
+            keys.extend(dependencies);
+            keys.sort();
+            keys.dedup();
+            // Replace the discovery map, including its clock/configuration, in
+            // one batch. Never append individually fetched dependencies to it.
+            accounts = fetch_accounts(cache, &keys).await?;
         }
         let (state, mints) = decode_state(self.pool_id, accounts, keys)?;
         let mut discovery = self.clone();

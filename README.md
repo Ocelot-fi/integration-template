@@ -1,5 +1,9 @@
 # Ocelot native issuer integration for Titan
 
+**16 November:** batched discovery and coherent full-batch RPC reads fix cache
+version mixing during refresh. Quote curves and the current five-bp midpoint
+policy are unchanged. [Scope and regression evidence](CACHE_VALIDATION.md).
+
 **14 November: native midpoint fallback with a five-bp output discount.**
 Normal books keep the existing conservative curve. Raw locked/crossed books
 prepare a common-midpoint approximation, rounding the midpoint up for buys and

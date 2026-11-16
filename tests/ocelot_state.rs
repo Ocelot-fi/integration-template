@@ -280,7 +280,10 @@ async fn advancing_cache_uses_only_final_executed_state() {
                 OcelotVenue::from_account(&pool, early.0[&pool].as_ref().unwrap()).unwrap()
             };
             mixed.update_state(&cache).await.unwrap();
-            assert_eq!(cache.batches.load(Ordering::SeqCst), 2);
+            assert_eq!(
+                cache.batches.load(Ordering::SeqCst),
+                if warm { 2 } else { 3 }
+            );
             let a = mixed.state().unwrap();
             let b = coherent.state().unwrap();
             assert_eq!(
@@ -359,4 +362,97 @@ async fn final_read_failure_or_changed_dependencies_invalidates_previous_quote()
     assert!(format!("{err:?}").contains("dependencies changed"));
     assert!(!candidate.initialized());
     assert!(candidate.state().is_err());
+}
+
+// Cold discovery must not seed a cache with individual dependency reads. The
+// initial clock is deliberately older than the next withdrawal-queue update.
+struct BatchOnly<'a> {
+    early: &'a support::Snapshot,
+    late: &'a support::Snapshot,
+    batches: Mutex<Vec<Vec<Pubkey>>>,
+}
+#[async_trait]
+impl AccountsCache for BatchOnly<'_> {
+    async fn get_account(&self, _: &Pubkey) -> Result<Option<Account>, AccountCacheError> {
+        panic!("discovery used an individual account read");
+    }
+    async fn get_accounts(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<Vec<Option<Account>>, AccountCacheError> {
+        let first = {
+            let mut batches = self.batches.lock().unwrap();
+            batches.push(keys.to_vec());
+            batches.len() == 1
+        };
+        if first {
+            self.early.get_accounts(keys).await
+        } else {
+            self.late.get_accounts(keys).await
+        }
+    }
+}
+
+#[tokio::test]
+async fn cold_discovery_batches_dependencies_with_clock_and_withdrawal_queue() {
+    for (file, pool) in FIXTURES {
+        let pool = pool.parse().unwrap();
+        let early = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let original = load(&early, pool).await;
+        let s = original.state().unwrap();
+        let mut late = support::Snapshot(early.0.clone());
+        let clock_key = solana_sdk_ids::sysvar::clock::ID;
+        let queue_key = s.exchange.withdraw_queue;
+        let mut clock = s.clock.clone();
+        clock.slot += 1;
+        late.0.get_mut(&clock_key).unwrap().as_mut().unwrap().data =
+            bincode::serialize(&clock).unwrap();
+        late.0.get_mut(&queue_key).unwrap().as_mut().unwrap().data[48..56]
+            .copy_from_slice(&clock.slot.to_le_bytes());
+        // Prove the original-clock/new-queue mixture triggers the reported guard.
+        let mut torn = support::Snapshot(late.0.clone());
+        torn.0.insert(clock_key, early.0[&clock_key].clone());
+        let mut rejected = original.clone();
+        assert!(
+            rejected
+                .update_state(&torn)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("invalid withdrawal budget")
+        );
+        assert!(!rejected.initialized());
+        let cache = BatchOnly {
+            early: &early,
+            late: &late,
+            batches: Mutex::new(vec![]),
+        };
+        let mut v = OcelotVenue::from_account(&pool, early.0[&pool].as_ref().unwrap()).unwrap();
+        v.update_state(&cache).await.unwrap();
+        let batches = cache.batches.lock().unwrap().clone();
+        assert_eq!(batches.len(), 3);
+        for batch in &batches[1..] {
+            for key in [
+                clock_key,
+                queue_key,
+                s.config.trader,
+                s.exchange.indices[0],
+                s.exchange.buffers[0],
+            ] {
+                assert!(batch.contains(&key));
+            }
+        }
+        assert_eq!(v.state().unwrap().clock.slot, clock.slot);
+        v.load_reference_oracle(&late).await.unwrap();
+        let coherent = load(&late, pool).await;
+        for mint in [true, false] {
+            let r = request(&v, mint, 1_000_000);
+            let q = v.quote(r.clone()).unwrap();
+            assert_eq!(
+                q.expected_output,
+                coherent.quote(r.clone()).unwrap().expected_output
+            );
+            assert!(q.expected_output <= v.reference_quote(&r).unwrap().output);
+        }
+    }
 }

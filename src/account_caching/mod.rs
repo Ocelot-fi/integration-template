@@ -39,6 +39,11 @@ pub trait AccountsCache: Send + Sync {
     /// Retrieve multiple accounts in a single operation.
     ///
     /// The returned vector must have the same length and ordering as `pubkeys`.
+    /// Ocelot preparation requires this vector to describe one coherent bank
+    /// snapshot, including the clock. Reusing unrelated earlier cache hits is
+    /// insufficient. Account last-write slots need not match: unchanged older
+    /// accounts can be valid at the same snapshot. The Account type carries no
+    /// context metadata, so the integration host must provide this consistency.
     ///
     /// Returns:
     /// - `Ok(vec![Some(acc1), None, Some(acc3), ...])`

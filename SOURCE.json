@@ -1,15 +1,15 @@
 {
-  "ocelot_source_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6",
-  "runtime_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6",
+  "ocelot_source_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8",
+  "runtime_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Capacity-only follow-up to 0581d19: full exits retain favorable original-book price bounds. Native curves, five-bp midpoint adjustment and partial routing behavior unchanged. Known wider-crossing output errors remain explicitly accepted implementation policy pending Titan acceptance; no activation.",
+  "review_scope": "Cache-coherence follow-up: batch discovery dependencies with clock/withdrawal queue and refresh all RPC batch keys. Quote curves, common-midpoint/five-bp policy and instructions unchanged; worst-mid remains separate. No activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
     "purpose": "Titan venue integration; upstream common quote and route tests retained"
   },
-  "exported_at": "2026-11-14",
+  "exported_at": "2026-11-16",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "25cdb9d81afa0e960bbfcd6b1471838836ab4ead"
+  "previous_runtime_commit": "2afd0107e1fbfbe1fd904c67ef1e44a223feb8b6"
 }

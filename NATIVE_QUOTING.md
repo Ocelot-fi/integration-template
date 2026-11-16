@@ -1,5 +1,11 @@
 # Native quoting implementation, updated 14 November 2026
 
+**16 November cache follow-up:** discovery now batches the trader, index,
+position buffer and withdrawal queue with the clock/configuration. The template's
+RPC cache refreshes every requested account from one response rather than reusing
+discovery-era values. Pricing and the five-bp midpoint policy are unchanged;
+worst-mid remains a separate proposed change. See [cache validation](CACHE_VALIDATION.md).
+
 `update_state()` prepares the bundled native provider from the supplied account
 snapshot. Normal books retain the conservative curve; locked/crossed books use
 an explicit common-midpoint approximation with an additional five-bp final-output
