@@ -1,5 +1,60 @@
 # Coherent account refresh, 16 November 2026
 
+## Strict account decoding
+
+The tooling RPC helper now reads typed `UiAccount` responses and decodes every
+non-null account explicitly before publishing a snapshot. Only an actual RPC
+`null` becomes `None`; invalid base64, corrupt/truncated zstd or an invalid owner
+reject the entire batch. A failed decode leaves the previous published snapshot
+and accepted slot floor untouched. Single-account misses use the same path.
+This closes the SDK convenience method's ambiguity between missing accounts and
+decode failures, including optional market withdrawal-limit accounts.
+
+Three regressions cover real compressed bytes plus null/duplicate/unknown keys,
+malformed account responses without partial publication or slot advancement,
+and Ocelot refresh through the actual RPC cache with a corrupt optional throttle.
+The latter clears quote/bounds/instruction state and recovers when RPC actually
+returns null. The corrupt-batch and optional-throttle tests both fail before the
+fix: the previous helper accepts their corrupt accounts as absent.
+
+`tests/common/mod.rs` contains the shared simulation preparation changes from the
+previous update. Its acceptance assertions remain unchanged; the `your_venue`
+header now explicitly distinguishes the two. The host cache contract also states
+that unreadable data must error, since absence has meaning for optional accounts.
+
+The first full live run also exposed a separate routed-test harness still doing
+fresh per-sample RPC reads (`program-template/.../tests/common/mod.rs`). After
+several successful comparisons its RPC node rejected a read with error -32016
+(minimum context slot not reached). Code inspection also confirmed those reads
+could mix quote/simulation state. The route harness now captures all quote,
+instruction and clock dependencies once, rebuilds from that snapshot and requires
+`RpcSnapshot` in its simulation loader. Exact-equality assertions are unchanged;
+no RPC reads occur during its comparison loop. The nested lockfile now records
+the decoder dependency already used by the host crate; no dependency versions
+or on-chain source changed.
+
+Pricing, five-bp midpoint adjustments, instruction bytes and on-chain programs
+are unchanged. No retry or scheduling redesign is included.
+
+Validation: 22 focused reference-feature tests and 12 default-feature tests pass,
+including the frozen 64,716-record quote/instruction baseline. Both selected
+Clippy configurations, formatting and shared test compilation pass. Valid zstd
+bytes are exercised rather than only mocked plain-base64 responses.
+
+The complete live `make test-example` rerun passes without skips against the
+public Solana mainnet RPC: eight reference tests, two creation/parser tests and
+the routed test with 20 exact-output comparisons across both directions. The
+first run's provider -32016 error is retained in local evidence; snapshot pinning
+removes per-sample network reads but does not guarantee that initial capture can
+never hit provider lag. No retries or relaxed slot floor were added.
+
+The existing router artifact matches the previously recorded SHA-256
+`b8997ff5ef34d8fa27a1e71fdfa1b134a6938788de920fa0e1d19b1f7d8652ba`;
+it was reused, not rebuilt or deployed by this change. These are local VM
+executions using live-read state, not transactions submitted to mainnet or a new
+Ocelot live refusal-rate measurement. Titan's sampler cache confirmation remains
+open.
+
 ## Review follow-up: pinned simulations and complete discovery
 
 The first cache fix changed a shared RPC helper without pinning the shared

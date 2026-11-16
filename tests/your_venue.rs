@@ -1,4 +1,5 @@
-//! Titan's unmodified shared acceptance assertions, wired to Ocelot.
+//! Titan's shared acceptance assertions, wired to Ocelot. Assertion checks are
+//! unchanged; tests/common/mod.rs now pins simulation preparation to one snapshot.
 //! With no RPC these SKIP. The curve assertions can also run through the local
 //! fixture RPC; the original VM cannot load current Phoenix binaries.
 //! Native conservative provider evidence lives in ocelot_phoenix/ocelot_replay.

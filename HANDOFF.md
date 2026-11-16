@@ -1,5 +1,43 @@
 # Ocelot integration handoff, 14 November 2026
 
+## Strict RPC decoding, 16 November 2026
+
+Source `bf39c48a30e2e0db5213d79c9b4ce109b5aaa74b` rejects unreadable non-null RPC accounts before publishing a
+snapshot. Only actual RPC nulls represent absent accounts. This prevents corrupt
+optional withdrawal-limit data from taking the unlimited-market-bucket path.
+Tests cover valid compressed bytes, corruption, absence, atomic publication and
+Ocelot refresh failure/recovery. Two regressions fail on the preceding code.
+
+Pricing, instructions, on-chain programs and the common-midpoint/five-bp policy
+are unchanged. `tests/common/mod.rs` still uses the prior pinned simulation
+preparation; acceptance assertions are unchanged and the venue header now says
+so explicitly. The separate route-test harness now pins its own quote/simulation
+accounts too, after live validation exposed per-sample network reads. Its
+assertions are unchanged. See [scope and evidence](CACHE_VALIDATION.md#strict-account-decoding).
+
+Source and standalone focused tests pass 22 reference / 12 default checks,
+including the 64,716-record frozen quote/instruction baseline. Both selected
+Clippy configurations, formatting and shared test compilation pass. All 94
+byte-identical export hashes match source; public-file screening passes.
+
+The source checkout's full live `make test-example` passes without skips against
+the public Solana mainnet RPC: eight reference tests, two creation/parser tests
+and 20 exact-output comparisons in the routed test. The first live run hit
+provider error -32016 during a per-sample read in the old route harness; its
+replacement uses one pinned snapshot for all comparisons. No retry or relaxed
+slot floor was added. Initial capture can still encounter provider lag.
+
+The existing router SBF matches the previously recorded SHA-256
+`b8997ff5ef34d8fa27a1e71fdfa1b134a6938788de920fa0e1d19b1f7d8652ba`.
+No on-chain source changed, and the artifact was reused, not rebuilt/deployed.
+These are local VM simulations with live-read state; no transactions were sent
+to mainnet. The exact cache Titan's sampler used remains unconfirmed. No new
+Ocelot live refusal rate, production-host fix or activation is claimed.
+
+
+## Prior handoff evidence
+
+
 ## Cache review follow-up, 16 November 2026
 
 Source `fbdc96b0a8b84cfe0800719a339a20a2ca459b32` fixes the shared simulation harness to pin quote preparation,

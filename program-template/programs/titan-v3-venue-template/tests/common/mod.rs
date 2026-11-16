@@ -34,14 +34,16 @@ use solana_sysvar::clock::{self, Clock};
 use solana_transaction::Transaction;
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_token::state::{Account as TokenAccount, AccountState};
+use titan_integration_template::account_caching::rpc_cache::{RpcClientCache, RpcSnapshot};
 use titan_integration_template::account_caching::AccountsCache;
-use titan_integration_template::account_caching::rpc_cache::RpcClientCache;
 use titan_integration_template::swap_route::{
-    ROUTE_WEIGHT_ALL, build_swap_leg, encode_swap_route_v3_data,
+    build_swap_leg, encode_swap_route_v3_data, ROUTE_WEIGHT_ALL,
 };
 use titan_integration_template::trading_venue::error::TradingVenueError;
 use titan_integration_template::trading_venue::token_info::TokenInfo;
-use titan_integration_template::trading_venue::{FromAccount, QuoteRequest, SwapType, TradingVenue};
+use titan_integration_template::trading_venue::{
+    FromAccount, QuoteRequest, SwapType, TradingVenue,
+};
 use titan_v3_venue_template::state::TitanPda;
 
 const SAMPLE_COUNT: usize = 10;
@@ -104,7 +106,12 @@ fn newest_rust_source_mtime(dir: &Path) -> Result<SystemTime, String> {
 fn ensure_route_program_is_fresh(route_so: &Path) -> Result<(), String> {
     let route_mtime = fs::metadata(route_so)
         .and_then(|metadata| metadata.modified())
-        .map_err(|e| format!("failed to stat built route program {}: {e}", route_so.display()))?;
+        .map_err(|e| {
+            format!(
+                "failed to stat built route program {}: {e}",
+                route_so.display()
+            )
+        })?;
     let src_dir = workspace_path("programs/titan-v3-venue-template/src");
     let source_mtime = newest_rust_source_mtime(&src_dir)?;
 
@@ -280,7 +287,7 @@ fn build_route_instruction(
 #[allow(clippy::too_many_arguments)]
 async fn load_route_accounts(
     litesvm: &mut LiteSVM,
-    cache: &RpcClientCache,
+    cache: &RpcSnapshot,
     venue: &dyn TradingVenue,
     payer: Pubkey,
     titan_pda: Pubkey,
@@ -314,7 +321,10 @@ async fn load_route_accounts(
     );
 
     litesvm
-        .set_account(input_ata, create_token_account(input_token, payer, u64::MAX))
+        .set_account(
+            input_ata,
+            create_token_account(input_token, payer, u64::MAX),
+        )
         .unwrap();
     litesvm
         .set_account(output_ata, create_token_account(output_token, payer, 0))
@@ -412,7 +422,10 @@ pub async fn run_swap_route<V: RouteVenue>(config: RouteConfig) {
 
     // (a) RPC endpoint.
     let Ok(rpc_url) = env::var("SOLANA_RPC_URL") else {
-        eprintln!("SKIP {}: set SOLANA_RPC_URL to run this swap-route test", current_test());
+        eprintln!(
+            "SKIP {}: set SOLANA_RPC_URL to run this swap-route test",
+            current_test()
+        );
         return;
     };
 
@@ -444,10 +457,16 @@ pub async fn run_swap_route<V: RouteVenue>(config: RouteConfig) {
 
     // Build the venue from live state.
     let rpc = RpcClient::new(rpc_url);
-    let venue_account = rpc.get_account(&config.pool).await.expect("failed to fetch pool account");
+    let venue_account = rpc
+        .get_account(&config.pool)
+        .await
+        .expect("failed to fetch pool account");
     let cache = RpcClientCache::new(rpc);
     let mut venue = V::from_account(&config.pool, &venue_account).expect("from_account failed");
-    venue.update_state(&cache).await.expect("update_state failed");
+    venue
+        .update_state(&cache)
+        .await
+        .expect("update_state failed");
 
     // LiteSVM with the route program + the venue's programs loaded.
     let (mut litesvm, payer) = setup_litesvm();
@@ -461,6 +480,45 @@ pub async fn run_swap_route<V: RouteVenue>(config: RouteConfig) {
     let (titan_pda, _) =
         Pubkey::find_program_address(&[TitanPda::SEED], &titan_v3_venue_template::ID);
     initialize_titan_pda(&mut litesvm, &payer, titan_pda);
+
+    // Rebuild quote state, simulation accounts and clock from one bank response.
+    // Per-sample network reads could otherwise compare a stale quote with newer
+    // vault balances. Unknown snapshot keys must fail instead of fetching again.
+    let mut keys = venue.get_required_pubkeys_for_update().unwrap();
+    keys.extend([config.pool, clock::ID]);
+    keys.extend(venue.get_token_info().iter().map(|token| token.pubkey));
+    for (input_index, output_index) in venue.directions_num() {
+        let (lower, upper) = venue.bounds(input_index, output_index).unwrap();
+        for amount in [lower, upper] {
+            let request = QuoteRequest {
+                input_mint: venue.get_token(input_index as usize).unwrap().pubkey,
+                output_mint: venue.get_token(output_index as usize).unwrap().pubkey,
+                amount,
+                swap_type: SwapType::ExactIn,
+            };
+            keys.extend(
+                venue
+                    .generate_swap_instruction(request, titan_pda)
+                    .unwrap()
+                    .accounts
+                    .into_iter()
+                    .map(|account| account.pubkey),
+            );
+        }
+    }
+    keys.sort();
+    keys.dedup();
+    let snapshot = cache.snapshot(&keys).await.expect("capture route snapshot");
+    let pool_account = snapshot
+        .get_account(&config.pool)
+        .await
+        .unwrap()
+        .expect("pinned pool account");
+    let mut venue = V::from_account(&config.pool, &pool_account).expect("from pinned account");
+    venue
+        .update_state(snapshot.as_ref())
+        .await
+        .expect("update from pinned snapshot");
 
     for (input_index, output_index) in venue.directions_num() {
         let (lower, upper) = venue.bounds(input_index, output_index).unwrap();
@@ -481,7 +539,7 @@ pub async fn run_swap_route<V: RouteVenue>(config: RouteConfig) {
 
             load_route_accounts(
                 &mut litesvm,
-                &cache,
+                snapshot.as_ref(),
                 &venue,
                 payer.pubkey(),
                 titan_pda,

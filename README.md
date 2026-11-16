@@ -1,5 +1,14 @@
 # Ocelot native issuer integration for Titan
 
+**16 November decoding follow-up:** unreadable RPC account data rejects the
+whole refresh; only actual RPC nulls count as absent accounts. This prevents a
+corrupt optional withdrawal-limit account from being treated as unlimited.
+[Validation and scope](CACHE_VALIDATION.md#strict-account-decoding).
+
+The bundled `RpcClientCache` is for tooling. Fetches sharing one instance run
+serially, and a single-account miss replaces its latest batch; retained snapshots
+remain immutable and make no network calls. Titan supplies its production cache.
+
 **16 November review follow-up:** shared simulations now pin quote accounts and
 clock together; RPC snapshots enforce nondecreasing slots and atomic publication.
 Discovery no longer depends on a sample order sizing successfully. 78 reference /

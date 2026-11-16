@@ -77,6 +77,7 @@ struct Sender {
     queue: Pubkey,
     start: u64,
     calls: Arc<Mutex<Vec<Vec<Pubkey>>>>,
+    override_account: Arc<Mutex<Option<(Pubkey, Value)>>>,
 }
 #[async_trait]
 impl RpcSender for Sender {
@@ -96,11 +97,27 @@ impl RpcSender for Sender {
         };
         assert!(params[1]["minContextSlot"].as_u64().unwrap() <= slot);
         let state = at_slot(&self.base, slot, self.queue);
-        let values: Vec<Value> = keys.iter().map(|key| match state.0.get(key).and_then(Option::as_ref) {
-            None => Value::Null,
-            Some(a) => json!({"lamports":a.lamports,"owner":a.owner.to_string(),"data":[STANDARD.encode(&a.data),"base64"],
-                "executable":a.executable,"rentEpoch":a.rent_epoch})
-        }).collect();
+        let override_account = self.override_account.lock().unwrap();
+        let values: Vec<Value> = keys
+            .iter()
+            .map(|key| {
+                if let Some((target, value)) = override_account.as_ref()
+                    && target == key
+                {
+                    return value.clone();
+                }
+                match state.0.get(key).and_then(Option::as_ref) {
+                    None => Value::Null,
+                    Some(a) => json!({
+                        "lamports":a.lamports,
+                        "owner":a.owner.to_string(),
+                        "data":[STANDARD.encode(&a.data),"base64"],
+                        "executable":a.executable,
+                        "rentEpoch":a.rent_epoch
+                    }),
+                }
+            })
+            .collect();
         Ok(json!({"context":{"slot":slot},"value":values}))
     }
     fn get_transport_stats(&self) -> RpcTransportStats {
@@ -167,6 +184,7 @@ async fn advancing_rpc_refresh_then_shared_simulation_pin_keeps_one_state() {
                 queue,
                 start,
                 calls: Arc::new(Mutex::new(vec![])),
+                override_account: Default::default(),
             },
             Default::default(),
         )),
@@ -188,6 +206,7 @@ async fn advancing_rpc_refresh_then_shared_simulation_pin_keeps_one_state() {
         queue,
         start,
         calls: calls.clone(),
+        override_account: Default::default(),
     };
     let cache = RpcClientCache::new(RpcClient::new_sender(sender, Default::default()));
     let mut v = OcelotVenue::from_account(&pool, base.0[&pool].as_ref().unwrap()).unwrap();
@@ -243,6 +262,54 @@ async fn advancing_rpc_refresh_then_shared_simulation_pin_keeps_one_state() {
         count,
         "pinned replays must not call RPC"
     );
+}
+
+#[tokio::test]
+async fn unreadable_optional_throttle_declines_instead_of_becoming_unlimited() {
+    let (base, mut venue) = fixture().await;
+    let pool: Pubkey = POOL.parse().unwrap();
+    let bucket = Pubkey::find_program_address(
+        &[b"withdraw_throttle", b"market", pool.as_ref()],
+        &titan_integration_template::ocelot::PROGRAM_ID,
+    )
+    .0;
+    let override_account = Arc::new(Mutex::new(None));
+    let cache = RpcClientCache::new(RpcClient::new_sender(
+        Sender {
+            queue: venue.state().unwrap().exchange.withdraw_queue,
+            start: venue.state().unwrap().clock.slot,
+            base: Arc::new(base),
+            calls: Default::default(),
+            override_account: override_account.clone(),
+        },
+        Default::default(),
+    ));
+    venue.update_state(&cache).await.unwrap();
+    let request = req(&venue, false, 1_000_000);
+    venue.quote(request.clone()).unwrap();
+    *override_account.lock().unwrap() = Some((
+        bucket,
+        json!({
+            "lamports":1, "owner":titan_integration_template::ocelot::PROGRAM_ID.to_string(),
+            "data":[STANDARD.encode(b"corrupt compressed throttle"), "base64+zstd"],
+            "executable":false, "rentEpoch":0
+        }),
+    ));
+    let err = venue.update_state(&cache).await.unwrap_err();
+    assert!(format!("{err:?}").contains("RPC failed to decode account"));
+    assert!(!venue.initialized());
+    assert!(venue.quote(request.clone()).is_err());
+    assert!(venue.bounds(0, 1).is_err());
+    assert!(
+        venue
+            .generate_swap_instruction(request.clone(), USER)
+            .is_err()
+    );
+    // Only an actual RPC null may take the program's absent-market-bucket path.
+    *override_account.lock().unwrap() = Some((bucket, Value::Null));
+    venue.update_state(&cache).await.unwrap();
+    assert!(!venue.state().unwrap().accounts.contains_key(&bucket));
+    venue.quote(request).unwrap();
 }
 
 #[tokio::test]

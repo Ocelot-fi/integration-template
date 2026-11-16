@@ -20,7 +20,7 @@ use solana_pubkey::Pubkey;
 /// - **Caching optional:** The trait *allows* caching but does not require it.
 ///
 /// Typical implementations include:
-/// - `RpcClientCache` (network-backed, concurrent cache)
+/// - `RpcClientCache` (network-backed, serialized snapshot capture)
 /// - Test harnesses using fixed HashMaps
 /// - Simulators like LiteSVM or custom in-process banks
 #[async_trait]
@@ -30,6 +30,8 @@ pub trait AccountsCache: Send + Sync {
     /// Returns:
     /// - `Ok(Some(Account))` if the account exists
     /// - `Ok(None)` if the account is known to be missing
+    ///
+    /// Unreadable account data must return an error, not `Ok(None)`.
     ///
     /// Errors:
     /// - RPC failures
@@ -44,6 +46,8 @@ pub trait AccountsCache: Send + Sync {
     /// insufficient. Account last-write slots need not match: unchanged older
     /// accounts can be valid at the same snapshot. The Account type carries no
     /// context metadata, so the integration host must provide this consistency.
+    /// Only accounts known to be absent may return `None`; a decode failure must
+    /// reject the batch, since optional accounts can control withdrawal limits.
     ///
     /// Returns:
     /// - `Ok(vec![Some(acc1), None, Some(acc3), ...])`

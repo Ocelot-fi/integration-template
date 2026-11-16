@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "fbdc96b0a8b84cfe0800719a339a20a2ca459b32",
-  "runtime_commit": "fbdc96b0a8b84cfe0800719a339a20a2ca459b32",
+  "ocelot_source_commit": "bf39c48a30e2e0db5213d79c9b4ce109b5aaa74b",
+  "runtime_commit": "bf39c48a30e2e0db5213d79c9b4ce109b5aaa74b",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Cache review follow-up: pin shared simulations, retain monotone RPC slots and atomic snapshots, discover accounts independently of sizing, and add end-to-end regressions. Pricing and five-bp policy unchanged; Titan cache confirmation pending. No activation.",
+  "review_scope": "Strict RPC decoding: reject unreadable non-null accounts before publication; preserve true absence and add compressed-data and optional-throttle regressions. Pricing and five-bp policy unchanged. Pin the separate route-test harness too; shared assertions and on-chain source unchanged. No activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,5 +11,5 @@
   "exported_at": "2026-11-16",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "20a9849862e14cabb8d2b9424f289c2a8e734bc8"
+  "previous_runtime_commit": "7bd6202b5291a298e26de5b6365fc7e166134f27"
 }

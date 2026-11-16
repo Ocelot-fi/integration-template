@@ -1,9 +1,12 @@
 //! Fresh RPC batches for tooling, with explicit immutable snapshots for replay.
 //! Titan's production AccountsCache remains supplied by the integration host.
 use async_trait::async_trait;
+use serde_json::json;
 use solana_account::Account;
-use solana_account_decoder_client_types::UiAccountEncoding;
-use solana_client::rpc_config::RpcAccountInfoConfig;
+use solana_account_decoder_client_types::{UiAccount, UiAccountEncoding};
+use solana_client::{
+    rpc_config::RpcAccountInfoConfig, rpc_request::RpcRequest, rpc_response::Response,
+};
 use solana_pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::{
@@ -100,16 +103,21 @@ impl RpcClientCache {
         if keys.is_empty() || keys.len() > 100 {
             return Err(invalid("RPC snapshot requires 1..=100 accounts"));
         }
-        let response = self
+        // The SDK convenience method maps failed decodes to None. Preserve RPC
+        // null separately: absent optional accounts can mean unlimited capacity.
+        let response: Response<Vec<Option<UiAccount>>> = self
             .rpc_client
-            .get_multiple_accounts_with_config(
-                keys,
-                RpcAccountInfoConfig {
-                    encoding: Some(UiAccountEncoding::Base64Zstd),
-                    commitment: Some(self.rpc_client.commitment()),
-                    min_context_slot: Some(*floor),
-                    ..Default::default()
-                },
+            .send(
+                RpcRequest::GetMultipleAccounts,
+                json!([
+                    keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                    RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64Zstd),
+                        commitment: Some(self.rpc_client.commitment()),
+                        min_context_slot: Some(*floor),
+                        ..Default::default()
+                    }
+                ]),
             )
             .await
             .map_err(AccountCacheError::FailedToFetchAccount)?;
@@ -119,9 +127,24 @@ impl RpcClientCache {
         if response.context.slot < *floor {
             return Err(invalid("RPC snapshot slot moved backwards"));
         }
+        let accounts = keys
+            .iter()
+            .copied()
+            .zip(response.value)
+            .map(|(key, value)| {
+                let account = value
+                    .map(|value| {
+                        value
+                            .decode::<Account>()
+                            .ok_or_else(|| invalid(&format!("RPC failed to decode account {key}")))
+                    })
+                    .transpose()?;
+                Ok((key, account))
+            })
+            .collect::<Result<HashMap<_, _>, AccountCacheError>>()?;
         let snapshot = Arc::new(RpcSnapshot {
             slot: response.context.slot,
-            accounts: keys.iter().copied().zip(response.value).collect(),
+            accounts,
         });
         *self
             .latest

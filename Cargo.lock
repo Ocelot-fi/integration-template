@@ -9366,6 +9366,7 @@ dependencies = [
  "tokio",
  "uint",
  "wincode",
+ "zstd",
 ]
 
 [[package]]

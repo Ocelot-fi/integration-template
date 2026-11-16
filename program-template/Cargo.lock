@@ -7321,6 +7321,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "solana-account",
+ "solana-account-decoder-client-types",
  "solana-account-info",
  "solana-client",
  "solana-compute-budget",
