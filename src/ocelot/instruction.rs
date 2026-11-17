@@ -92,11 +92,49 @@ pub fn build(
     user: Pubkey,
     min_output: u64,
 ) -> Result<Instruction> {
+    build_inner(v, amount, mint, user, min_output, true)
+}
+
+/// Independent replay must still try sizes the prepared book cannot model.
+/// Uses the shared policy cap, without consulting the native provider's depth.
+#[cfg(feature = "reference-simulation")]
+pub(super) fn build_reference(
+    v: &OcelotVenue,
+    amount: u64,
+    mint: bool,
+    user: Pubkey,
+    min_output: u64,
+) -> Result<Instruction> {
+    build_inner(v, amount, mint, user, min_output, false)
+}
+
+fn build_inner(
+    v: &OcelotVenue,
+    amount: u64,
+    mint: bool,
+    user: Pubkey,
+    min_output: u64,
+    book_limit: bool,
+) -> Result<Instruction> {
     let s = v.state()?;
     if amount == 0 {
         return Err(invalid("zero input"));
     }
-    let sizing = super::quote::order(s, amount, mint)?;
+    let mut sizing = super::quote::order(s, amount, mint)?;
+    if book_limit && sizing.lots != 0 {
+        let limit = v
+            .matcher
+            .as_deref()
+            .ok_or(invalid("missing Phoenix provider"))?
+            .execution_limit(&sizing)?;
+        if limit == 0
+            || (sizing.buy && limit > sizing.limit_ticks)
+            || (!sizing.buy && limit < sizing.limit_ticks)
+        {
+            return Err(invalid("provider IOC limit exceeds policy cap"));
+        }
+        sizing.limit_ticks = limit;
+    }
     let net = sizing.deposit;
     let order = if !mint && s.position.base == 0 {
         vec![]

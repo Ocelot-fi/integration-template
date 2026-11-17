@@ -75,6 +75,11 @@ fn widths_fills_expiry_hidden_liquidity_and_limits() {
     assert_eq!(depth.best_ask(), Some(104));
     assert_eq!(depth.declared_lots(false), 8);
     assert_eq!(depth.declared_lots(true), 10); // Hidden take size is not incoming liquidity.
+    assert_eq!(depth.worst_fill_price(1, true).unwrap(), 104);
+    assert_eq!(depth.worst_fill_price(8, true).unwrap(), 105);
+    assert_eq!(depth.worst_fill_price(8, false).unwrap(), 96);
+    assert!(depth.worst_fill_price(11, true).is_err());
+    assert!(depth.worst_fill_price(0, true).is_err());
     assert_eq!(
         assert_no_alloc::assert_no_alloc(|| depth.quote_notional(8, false, 96, 2)).unwrap(),
         1542

@@ -638,6 +638,13 @@ impl NativePhoenix {
 }
 
 impl PhoenixQuoter for NativePhoenix {
+    fn execution_limit(&self, order: &Order) -> Result<u64> {
+        if order.lots == 0 {
+            return Ok(order.limit_ticks);
+        }
+        super::quote::cushioned_limit(self.depth.worst_fill_price(order.lots, order.buy)?, order)
+    }
+
     fn curve(&self, mint: bool) -> Option<&Curve> {
         self.curves[usize::from(!mint)].as_ref()
     }

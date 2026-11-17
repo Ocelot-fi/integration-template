@@ -327,7 +327,7 @@ impl OcelotVenue {
                 input_remaining: 0,
             });
         }
-        let ix = instruction::build(self, r.amount, mint, DISCOVERY_USER, 1)?;
+        let ix = instruction::build_reference(self, r.amount, mint, DISCOVERY_USER, 1)?;
         self.simulator
             .as_ref()
             .ok_or(TradingVenueError::NotInitialized("execution oracle".into()))?

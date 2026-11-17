@@ -153,10 +153,11 @@ async fn regular_finance_price_policy_is_used_by_both_instructions() {
         for mint in [true, false] {
             let state = v.state().unwrap();
             let order = ocelot::quote::order(state, 1_000_000, mint).unwrap();
+            // Reserve 10 bp inside this deliberately stricter 25 bp policy.
             let limit = if order.buy {
-                state.mark.ticks as u128 * 10_025 / 10_000
+                state.mark.ticks as u128 * 10_015 / 10_000
             } else {
-                (state.mark.ticks as u128 * 9_975).div_ceil(10_000)
+                (state.mark.ticks as u128 * 9_985).div_ceil(10_000)
             };
             assert_eq!(order.limit_ticks as u128, limit);
             let r = QuoteRequest {
@@ -167,6 +168,17 @@ async fn regular_finance_price_policy_is_used_by_both_instructions() {
             };
             let q = v.quote(r.clone()).unwrap();
             assert!(q.expected_output <= v.reference_quote(&r).unwrap().output);
+            let ix = v.build_with_minimum(&r, USER, q.expected_output).unwrap();
+            let encoded = ocelot::codec::u64_at(&ix.data, if mint { 59 } else { 23 }).unwrap();
+            assert!(if order.buy {
+                encoded as u128 <= limit
+            } else {
+                encoded as u128 >= limit
+            });
+            v.execution_oracle()
+                .unwrap()
+                .execute(ix, r.input_mint, r.output_mint, r.amount)
+                .unwrap();
         }
         for invalid in [0u16, 1000] {
             cache.0.get_mut(&finance).unwrap().as_mut().unwrap().data[59..61]

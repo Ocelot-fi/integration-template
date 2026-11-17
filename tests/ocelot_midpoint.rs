@@ -449,7 +449,7 @@ fn check_chord(a: &QuoteResult, b: &QuoteResult) {
 }
 
 #[cfg(feature = "reference-simulation")]
-async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64) {
+async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64) -> bool {
     let mut v = decoded(cache, key).await;
     v.load_reference_oracle(cache).await.unwrap();
     // Full-market exits are a separate quote domain outside routed bounds.
@@ -467,9 +467,43 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
             "execution_error":e.as_ref().err().map(ToString::to_string),
         })
     );
-    assert!(q.unwrap().expected_output <= e.unwrap().output);
+    let full_declined = match q {
+        Ok(q) => {
+            assert!(q.expected_output <= e.unwrap().output);
+            false
+        }
+        Err(error) => {
+            // Record exact artificial states excluded by the tighter IOC cap.
+            // The caller pins this set, so further declines cannot pass silently.
+            assert!(
+                error
+                    .to_string()
+                    .contains("spline quote exceeds IOC price limit"),
+                "{label}: {error}"
+            );
+            match e {
+                Ok(_) => assert_eq!(
+                    label,
+                    "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=32"
+                ),
+                Err(error) => {
+                    assert_eq!(
+                        label,
+                        "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=32"
+                    );
+                    assert!(
+                        error
+                            .to_string()
+                            .contains("IOC order does not meet minimum requirements"),
+                        "{error}"
+                    );
+                }
+            }
+            true
+        }
+    };
     if std::env::var("MIDPOINT_FULL_EXITS_ONLY").is_ok_and(|v| v == "1") {
-        return;
+        return full_declined;
     }
     for mint in [true, false] {
         let Ok((lo, hi)) = v.bounds(u8::from(!mint), u8::from(mint)) else {
@@ -558,7 +592,15 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
                 check_chord(p, &q);
             }
             if execute.contains(&amount) {
-                match v.reference_quote(&r) {
+                // Exercise the actual book-cushioned instruction, not only the
+                // independent replay's wider shared policy cap.
+                let execution = v
+                    .build_with_minimum(&r, ocelot::simulation::USER, 1)
+                    .and_then(|ix| {
+                        v.execution_oracle()?
+                            .execute(ix, r.input_mint, r.output_mint, amount)
+                    });
+                match execution {
                     Ok(e) => {
                         comparisons += 1;
                         if q.expected_output > e.output {
@@ -599,6 +641,7 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
             "execution rejection regression: {label} mint={mint}"
         );
     }
+    full_declined
 }
 
 #[cfg(feature = "reference-simulation")]
@@ -621,16 +664,19 @@ async fn production_execution_sweep() {
         ] {
             for market in [0, 1] {
                 let (_, cache) = captured(file, market).await;
-                sweep(
-                    &cache,
-                    FIXTURES[market].1.parse().unwrap(),
-                    &format!("captured/{file}/market={market}"),
-                    stride,
-                )
-                .await;
+                assert!(
+                    !sweep(
+                        &cache,
+                        FIXTURES[market].1.parse().unwrap(),
+                        &format!("captured/{file}/market={market}"),
+                        stride,
+                    )
+                    .await
+                );
             }
         }
     } else {
+        let mut full_declines = Vec::new();
         for (file, market) in FIXTURES {
             let key = market.parse().unwrap();
             let original = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
@@ -644,16 +690,20 @@ async fn production_execution_sweep() {
                     let o = 112 + maker * 1336 + 40;
                     let mid = u64_at(d, o).unwrap();
                     put64(d, o, if raise { mid + width } else { mid - width });
-                    sweep(
-                        &changed,
-                        key,
-                        &format!("controlled/{file}/raise={raise}/cross_ticks={width}"),
-                        stride,
-                    )
-                    .await;
+                    let label = format!("controlled/{file}/raise={raise}/cross_ticks={width}");
+                    if sweep(&changed, key, &label, stride).await {
+                        full_declines.push(label);
+                    }
                 }
             }
         }
+        assert_eq!(
+            full_declines,
+            [
+                "controlled/sol3l-467430913.bin.gz/raise=false/cross_ticks=32",
+                "controlled/sol2s-467431351.bin.gz/raise=true/cross_ticks=32"
+            ]
+        );
     }
 }
 

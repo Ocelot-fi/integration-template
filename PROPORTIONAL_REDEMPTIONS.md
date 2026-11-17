@@ -106,7 +106,8 @@ against the old planner. Production V4 allowlisting and Titan's own final route-
 rollback remain acceptance requirements. Simulate/re-route failures and refresh stale
 wallet transactions; a quote is not a promise across arbitrary state changes.
 
-The separate signed IOC limit sitting at the configured price-policy edge remains open.
-This quantity fix does not add IOC headroom or relax a program risk check. ANT remains
+The quantity fix did not add IOC headroom or relax a program risk check. A subsequent
+adapter change adds [book-based limits and headroom](IOC_LIMITS.md); its validation
+and review status are recorded separately from this program candidate. ANT remains
 outside the validated oracle profile. No merge, on-chain upgrade or routing activation
 is included in this change.

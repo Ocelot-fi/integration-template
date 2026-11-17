@@ -3,6 +3,8 @@
 //! are independently exercised against the pinned candidate executable.
 //! Previous V4 instruction hash: 43c34f24af5754ed44e0eb7dd177648199e628da80ecbed44a7e4ce00a2fa93b.
 //! Redemption lot hints and three tiny-input error strings change; accepted quotes stay pinned.
+//! Pre-book-cushion instruction hash: c1b75fc343bc525b6c7fdee85a9ee03478c0a4dd87387c05061a50731a512f95.
+//! Book-cushioned IOC prices change instruction bytes; accepted quotes stay pinned.
 //! Initial upgrade/mark-forecast hash: a7bec29e5ba5364724678e0bf0dbb56b4115f170ee96adba7f1d33e50d419cb5.
 //! Pre-upgrade hash: 67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe.
 #[allow(dead_code)]
@@ -107,6 +109,6 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
     );
     assert_eq!(
         format!("{:x}", Sha256::digest(out.as_bytes())),
-        "c1b75fc343bc525b6c7fdee85a9ee03478c0a4dd87387c05061a50731a512f95"
+        "32386193f752dea354edf1d5287d90154c588347a8559dc19caf4a32ce13fe4b"
     );
 }

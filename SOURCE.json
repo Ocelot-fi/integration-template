@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "6152c3027ee03f81cb664fe2da750faf2dbec186",
-  "runtime_commit": "6152c3027ee03f81cb664fe2da750faf2dbec186",
+  "ocelot_source_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
+  "runtime_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Match the un-deployed proportional-redemption program candidate; preserve curves/worst-mid pricing. Reproduce deployed failures and require successful proportional exits, exact quote safety and bounded rejection tests. Coordinated program/SDK/Titan rollout required; no activation.",
+  "review_scope": "Book-based IOC limits: 25 bp beyond the last required fill, capped 10 bp inside program policy. Existing output smoothing and worst-mid pricing remain. Exact execution and availability evidence in IOC_LIMITS.md. Program upgrade and activation remain separate.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,5 +11,5 @@
   "exported_at": "2026-11-17",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "c9c62091a2c787aa76372a89dd4a3a3d76d8c548"
+  "previous_runtime_commit": "6152c3027ee03f81cb664fe2da750faf2dbec186"
 }

@@ -1,5 +1,41 @@
 # Ocelot integration handoff, 14 November 2026
 
+## November 17 book-based IOC limit follow-up
+
+Source `54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0` adds a 25 bp execution cushion beyond the worst price needed for
+the full modeled order. Quoting and instruction building reserve 10 bp inside
+the configured program policy (40 bp cap under the captured 50 bp policy).
+No new output discount, program/SDK change or quote-time book walk is added.
+The extra cached-depth lookup runs only during instruction construction.
+
+Source validation: 420 captured-state built instructions execute with unchanged
+fills; 40 delayed-mark executions succeed, with 16 former policy-edge failures
+reproduced by restoring the old limit. The artificial-crossing sweep checks
+2,649,409 curve points and executes 30,585 accepted instructions with zero
+overquotes, failures or range holes. Two full-exit declines and two unavailable
+directions at artificial 32-tick crossings are recorded explicitly. These are
+availability trade-offs, not accepted-quote failures hidden by skips.
+
+The accepted normal output/price/bounds hash remains unchanged. Local median
+batch-mean quote times are 124–141 ns; median refresh is 1.32–1.92 ms. The source
+checks include 79 selected reference-feature tests, 47 default checks, 20 shared
+Titan checks, three routed/rollback tests, library Clippy and formatting.
+See [settings, tests, exact scope and remaining limits](IOC_LIMITS.md).
+
+The adapter still targets the separately pinned, un-deployed proportional V4
+program candidate. Program review/upgrade, Titan activation and production
+router acceptance remain separate. No on-chain artifact was rebuilt or deployed.
+
+Standalone export verification: all eight focused reference-feature tests pass,
+including the book-limit regression, normal quote/instruction golden, upgraded
+program compatibility and full-exit capacity checks. Formatting and whitespace
+checks pass. All 107 byte-identical source/export hashes match. The complete
+source suites and sweeps above were run against these identical runtime/test
+files; they were not all repeated in the standalone checkout. SHA256SUMS covers
+the complete current export, including normalized docs and handoff metadata.
+
+## Earlier handoff evidence
+
 ## November 17 proportional redemption correction
 
 Source `6152c3027ee03f81cb664fe2da750faf2dbec186` mirrors the new proportional V4 program planner. This is an

@@ -16,6 +16,12 @@ pub trait PhoenixQuoteFactory: Send + Sync {
 /// Immutable native matcher bound to exactly one State by its factory.
 /// Implementations must be allocation-free and must not simulate or do I/O.
 pub trait PhoenixQuoter: Send + Sync {
+    /// Instruction construction only. Providers may tighten the shared policy
+    /// cap around the final required book level; quoting keeps the cached cap.
+    fn execution_limit(&self, order: &Order) -> Result<u64> {
+        Ok(order.limit_ticks)
+    }
+
     /// Identifies the locked/crossed worst-mid path for diagnostics.
     /// This flag does not apply an output discount or certify capacity.
     fn is_midpoint_approximation(&self) -> bool {
@@ -271,10 +277,35 @@ fn order_with_limits(s: &State, limits: Limits, amount: u64, mint: bool) -> Resu
 }
 
 pub(crate) fn limit_ticks(s: &State, buy: bool) -> Result<u64> {
+    // Reserve 10 bp of the program's band for changes to its execution-time
+    // mark. Small policies use a zero-deviation cap; tick rounding is inward.
+    let bps = s.price_bps.saturating_sub(IOC_POLICY_HEADROOM_BPS).min(100) as u128;
     narrow(if buy {
-        s.mark.ticks as u128 * (10_000 + s.price_bps.min(100) as u128) / 10_000
+        s.mark.ticks as u128 * (10_000 + bps) / 10_000
     } else {
-        (s.mark.ticks as u128 * (10_000 - s.price_bps.min(100) as u128)).div_ceil(10_000)
+        (s.mark.ticks as u128 * (10_000 - bps)).div_ceil(10_000)
+    })
+}
+
+pub const IOC_POLICY_HEADROOM_BPS: u16 = 10;
+pub const IOC_BOOK_CUSHION_BPS: u16 = 25;
+
+/// Cushion the worst required fill, not the average execution price. Cap the
+/// cushion rather than rejecting a fill which fits inside the shared policy cap.
+pub(crate) fn cushioned_limit(worst: u64, order: &Order) -> Result<u64> {
+    if worst == 0
+        || (order.buy && worst > order.limit_ticks)
+        || (!order.buy && worst < order.limit_ticks)
+    {
+        return Err(invalid("required book price exceeds IOC cap"));
+    }
+    narrow(if order.buy {
+        (worst as u128 * (10_000 + IOC_BOOK_CUSHION_BPS as u128))
+            .div_ceil(10_000)
+            .min(order.limit_ticks as u128)
+    } else {
+        (worst as u128 * (10_000 - IOC_BOOK_CUSHION_BPS as u128) / 10_000)
+            .max(order.limit_ticks as u128)
     })
 }
 

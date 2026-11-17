@@ -1,5 +1,9 @@
 # Ocelot native issuer integration for Titan
 
+**Latest adapter follow-up: [book-based IOC limits](IOC_LIMITS.md).** A 25 bp cushion around
+required fill depth is capped 10 bp inside the program policy. No extra output
+discount. Submitted for engineering review; routing activation remains pending.
+
 **Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
 This adapter now mirrors an un-deployed program fix that closes the redeemed share of
 exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
@@ -20,7 +24,7 @@ The program and final route minimum remain the execution guards.
 
 Submitted for engineering review in [PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
 Activation remains pending: Titan's V4 CPI allowlist and production host/route
-acceptance, simulation recovery, and the separate signed IOC limit headroom issue.
+acceptance, simulation recovery, and review of the IOC-limit follow-up.
 ANT remains outside the validated oracle profile. No Ocelot deployment is included.
 
 ## Earlier submission history

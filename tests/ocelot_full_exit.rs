@@ -176,6 +176,21 @@ async fn full_exit_rejects_insufficient_capacity_without_changing_partial_quotes
             // No new crossing gate or partial-range restriction, even with the
             // tight full-exit throttle: every sampled routed quote is identical.
             for (input, output) in [(0, 1), (1, 0)] {
+                if shift == 32 && input == 0 {
+                    // The artificial wide crossing puts all modeled mint depth
+                    // outside the new 40 bp IOC cap. Throttles must not change
+                    // that direction's unavailability or disable redemptions.
+                    for venue in [&v, &candidate] {
+                        assert!(
+                            venue
+                                .bounds(input, output)
+                                .unwrap_err()
+                                .to_string()
+                                .contains("no supported mint curve")
+                        );
+                    }
+                    continue;
+                }
                 let (lo, hi) = v.bounds(input, output).unwrap();
                 assert_eq!(candidate.bounds(input, output).unwrap(), (lo, hi));
                 for i in 0..=128 {

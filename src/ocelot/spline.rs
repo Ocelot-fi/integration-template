@@ -235,6 +235,18 @@ impl SplineDepth {
             .map(|l| (l.price, l.cumulative_lots, l.cumulative_tick_lots))
     }
 
+    /// Last price needed for the entire quantity, after prepared maker limits.
+    pub fn worst_fill_price(&self, lots: u64, buy: bool) -> Result<u64> {
+        if lots == 0 {
+            return Err(invalid("empty order has no fill price"));
+        }
+        let levels = self.side(buy);
+        levels
+            .get(levels.partition_point(|l| l.cumulative_lots < lots))
+            .map(|level| level.price)
+            .ok_or(invalid("insufficient declared spline depth"))
+    }
+
     /// Walk prepared spline geometry, excluding FIFO/hidden take liquidity.
     /// Returns estimated notional before fees, not a production fill guarantee.
     pub fn quote_notional(

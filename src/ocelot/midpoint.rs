@@ -88,6 +88,10 @@ impl MidpointPhoenix {
     }
 }
 impl PhoenixQuoter for MidpointPhoenix {
+    fn execution_limit(&self, order: &Order) -> Result<u64> {
+        self.side(order.buy).execution_limit(order)
+    }
+
     fn quote(&self, order: &Order) -> Result<Fill> {
         self.side(order.buy).quote(order)
     }

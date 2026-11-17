@@ -1,5 +1,9 @@
 # Native quoting implementation, updated 17 November 2026
 
+**Latest adapter follow-up:** [book-based IOC limits](IOC_LIMITS.md) reserve policy headroom
+and cushion the required fill price. Curve arithmetic and worst-mid pricing are
+unchanged; a tighter shared cap can reduce available depth. Activation remains pending.
+
 **Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
 This adapter now mirrors an un-deployed program fix that closes the redeemed share of
 exposure, rounded up, instead of spending leverage-band headroom. The conservative curve

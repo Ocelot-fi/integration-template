@@ -132,10 +132,11 @@ Titan's production route-minimum implementation.
 
 ## Remaining limits and activation requirements
 
-- **Signed IOC headroom remains unresolved.** The adapter signs at the stricter
-  of the regular finance policy and its 100 bp band. At the deployed 50 bp policy
-  boundary, a one-tick adverse mark move before execution can invalidate the
-  signed limit. Removing mark prediction does not fix this separate issue.
+- **IOC follow-up:** [book-based limits](IOC_LIMITS.md) add a 25 bp cushion
+  beyond required depth, capped 10 bp inside the program policy. This addresses
+  the reproduced one-tick policy-edge rejection, without predicting the mark.
+  Activation remains pending. Larger movements, changed mint lot sizing,
+  expired liquidity and final-output slippage can still reject execution.
 - Titan must confirm recovery from simulated risk-check failures and accept the
   measured availability trade-off. The prior statement that Titan simulates
   quotes does not by itself establish retry/re-route behavior.
