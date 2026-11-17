@@ -366,6 +366,7 @@ pub struct NativePhoenix {
     risk: RiskMarket,
     tick: u64,
     fee_micro: u64,
+    mint_sell_fee_ticks: u64,
     withdrawal_capacity: u64,
     best_bid: u64,
     best_ask: u64,
@@ -383,6 +384,12 @@ impl NativePhoenix {
     }
 
     pub fn prepare(s: &State) -> Result<Self> {
+        Self::prepare_with_mint_fee_bound(s, None)
+    }
+
+    /// Recentered models must also reserve mint fees for better actual sell
+    /// fills. Supply an upper bound from the ORIGINAL book, including FIFO.
+    pub fn prepare_with_mint_fee_bound(s: &State, sell_fee_ticks: Option<u64>) -> Result<Self> {
         let g = owned(s, PHOENIX_GLOBAL, "account:global_configuration", 1104)?;
         let restart = u64_at(
             &get(s, solana_sdk_ids::sysvar::last_restart_slot::ID)?.data,
@@ -596,7 +603,14 @@ impl NativePhoenix {
             deposited <= s.clock.slot && s.clock.slot - deposited >= u64_at(g, 512)?;
         // Shared account/risk/geometry failures above still invalidate the whole
         // state. A curve representability failure disables only that direction.
-        let curve = |mint| match Curve::from_spline_depth(s, &depth, fee_micro, mint) {
+        let mint_sell_fee_ticks = best_bid.max(sell_fee_ticks.unwrap_or(0));
+        let curve = |mint| match Curve::from_spline_depth_with_mint_fee_bound(
+            s,
+            &depth,
+            fee_micro,
+            mint,
+            mint_sell_fee_ticks,
+        ) {
             Ok(curve) => curve,
             Err(error) => {
                 log::debug!(
@@ -613,6 +627,7 @@ impl NativePhoenix {
             risk,
             tick: s.config.tick_size,
             fee_micro,
+            mint_sell_fee_ticks,
             withdrawal_capacity,
             best_bid,
             best_ask,
@@ -658,7 +673,19 @@ impl PhoenixQuoter for NativePhoenix {
             .quote_notional(o.lots, o.buy, o.limit_ticks, self.tick)?;
         // Bound fee rounding even if matching splits into one-lot fills. This
         // reserve is intentional underquoting, not a claimed exact Phoenix fee.
-        let fee = (quote as u128 * self.fee_micro as u128).div_ceil(1_000_000)
+        let fee_notional = if !o.reduce_only && !o.buy {
+            (o.lots as u128)
+                .checked_mul(self.mint_sell_fee_ticks as u128)
+                .and_then(|v| v.checked_mul(self.tick as u128))
+                .ok_or(invalid("mint fee bound overflow"))?
+                .max(quote as u128)
+        } else {
+            quote as u128
+        };
+        let fee = fee_notional
+            .checked_mul(self.fee_micro as u128)
+            .ok_or(invalid("Phoenix fee overflow"))?
+            .div_ceil(1_000_000)
             + if self.fee_micro == 0 {
                 0
             } else {

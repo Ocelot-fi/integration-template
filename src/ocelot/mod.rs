@@ -104,6 +104,8 @@ pub struct State {
     pub clock: Clock,
     pub actual_supply: u64,
     pub revision: u64,
+    pub price_bps: u16,
+    pub live_mark_bounds: (u128, u128),
     pub gross: u64,
     pub liability: u64,
     pub exchange: instruction::Exchange,
@@ -199,6 +201,10 @@ fn decode_state(
         return Err(invalid("inactive/mismatched finance"));
     }
     let revision = u64_at(f, 43)?;
+    let price_bps = codec::u16_at(f, 59)?;
+    if price_bps == 0 || price_bps >= 1000 {
+        return Err(invalid("unsupported regular execution price policy"));
+    }
     let cash = u64_at(f, 51)?;
     let g = codec::account(
         read(&PHOENIX_GLOBAL)?,
@@ -244,6 +250,7 @@ fn decode_state(
     let position = codec::position(accounts.get(&c.trader).ok_or(invalid("missing child"))?, &c)?;
     let gross = codec::gross(position, mark, cash)?;
     let liability = codec::accrued_liability(&m, gross, clock.unix_timestamp)?;
+    let live_mark_bounds = codec::live_mark_bounds(read(&PERP_MAP)?, &c, mark, clock.slot)?;
     let state = State {
         market: m,
         config: c,
@@ -252,6 +259,8 @@ fn decode_state(
         clock,
         actual_supply,
         revision,
+        price_bps,
+        live_mark_bounds,
         gross,
         liability,
         exchange,
@@ -562,7 +571,7 @@ impl TradingVenue for OcelotVenue {
         } else {
             (1, quote::routing_redemption_cap(state, limits)?)
         };
-        bounds::find_boundaries(&|amount| {
+        let accepts = |amount| {
             if amount < floor || amount > cap {
                 return Err(invalid("outside continuous finance range"));
             }
@@ -570,6 +579,16 @@ impl TradingVenue for OcelotVenue {
                 amount,
                 ..request.clone()
             })
-        })
+        };
+        let (lo, hi) = bounds::find_boundaries(&accepts)?;
+        if mint {
+            Ok((lo, hi))
+        } else {
+            let matcher = self.matcher.as_deref().ok_or(invalid("missing matcher"))?;
+            Ok((
+                lo,
+                quote::redemption_prefix(state, limits, matcher, lo, hi, &|n| accepts(n).is_ok()),
+            ))
+        }
     }
 }

@@ -37,7 +37,8 @@ fn request(v: &OcelotVenue) -> QuoteRequest {
     }
 }
 async fn crossed(market: usize, shift: u64) -> (support::Snapshot, OcelotVenue) {
-    let mut c = support::Snapshot::read(Path::new("tests/fixtures/sol-crossed-468615690.bin.gz"));
+    let mut c =
+        support::Snapshot::current(Path::new("tests/fixtures/sol-crossed-468615690.bin.gz"));
     let key = MARKETS[market].parse().unwrap();
     let v = decoded(&c, key).await;
     let s = v.state().unwrap();

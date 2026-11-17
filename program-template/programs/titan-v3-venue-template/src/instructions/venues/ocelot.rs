@@ -1,9 +1,9 @@
-//! Ocelot v3 CPI adapter. Pinned ExactIn data is rejected if routing changes its amount.
+//! Ocelot V3 mint / V4 redemption CPI adapter. Pinned ExactIn data is rejected if routing changes its amount.
 use crate::error::TemplateError;
 use anchor_lang::{prelude::*, solana_program::instruction::Instruction};
 pub const OCELOT_PROGRAM_ID: Pubkey = pubkey!("CpLah6JAC9967YiVQnQJegfCKEjLEcUYmx3PCYgg9xWf");
 const MINT: [u8; 8] = [190, 51, 100, 237, 14, 73, 165, 91];
-const REDEEM: [u8; 8] = [207, 0, 207, 230, 122, 44, 120, 250];
+const REDEEM: [u8; 8] = [144, 227, 99, 40, 128, 192, 209, 93];
 pub fn swap(
     data: &[u8; 160],
     len: u8,
@@ -43,7 +43,7 @@ pub fn swap(
 mod tests {
     use super::*;
     #[test]
-    fn accepts_v3_with_router_or_explicit_minimum_and_pins_input() {
+    fn accepts_mint_v3_redeem_v4_and_pins_input() {
         for (disc, len) in [(MINT, 148usize), (REDEEM, 112), (REDEEM, 55)] {
             let mut data = [0; 160];
             data[..8].copy_from_slice(&disc);
@@ -63,6 +63,13 @@ mod tests {
             data[0] ^= 1;
             assert!(swap(&data, len as u8, 100, 100, &[]).is_err());
         }
+        let mut retired = [0; 160];
+        retired[..8].copy_from_slice(&[207, 0, 207, 230, 122, 44, 120, 250]);
+        retired[8..16].copy_from_slice(&100u64.to_le_bytes());
+        assert!(
+            swap(&retired, 112, 100, 100, &[]).is_err(),
+            "retired V3 redemption must never route"
+        );
         for len in [0, 54, 113, 147, 149, 161, 255] {
             assert!(swap(&[0; 160], len, 100, 100, &[]).is_err());
         }

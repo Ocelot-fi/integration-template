@@ -118,7 +118,7 @@ async fn lock(
 }
 
 async fn captured(file: &str, market: usize) -> (OcelotVenue, support::Snapshot) {
-    let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
     let v = decoded(&cache, FIXTURES[market].1.parse().unwrap()).await;
     (v, cache)
 }
@@ -126,7 +126,7 @@ async fn captured(file: &str, market: usize) -> (OcelotVenue, support::Snapshot)
 #[tokio::test]
 async fn normal_output_price_bounds_and_instructions_are_unchanged() {
     for (file, market) in FIXTURES {
-        let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
         let v = decoded(&cache, market.parse().unwrap()).await;
         assert!(!v.uses_midpoint_approximation());
         let mut strict = v.clone();
@@ -209,7 +209,11 @@ async fn default_worst_mid_preserves_accounts_and_returns_curve_without_haircut(
                         put64(d, o + 40, mid);
                     }
                 }
-                let native = NativePhoenix::prepare(&model).unwrap();
+                let native = NativePhoenix::prepare_with_mint_fee_bound(
+                    &model,
+                    Some(raw.best_bid().unwrap().max(*mids.iter().max().unwrap())),
+                )
+                .unwrap();
                 let (lo, hi) = v.bounds(u8::from(!mint), u8::from(mint)).unwrap();
                 for amount in [0, lo, lo + (hi - lo) / 2, hi] {
                     let q = assert_no_alloc::assert_no_alloc(|| v.quote(request(&v, mint, amount)))
@@ -227,7 +231,7 @@ async fn default_worst_mid_preserves_accounts_and_returns_curve_without_haircut(
 async fn refresh_transitions_restore_native_and_failed_refresh_clears_state() {
     for (file, market) in FIXTURES {
         let key = market.parse().unwrap();
-        let normal = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let normal = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
         let (mut changed, maker) = lock(&normal, key, true).await;
         let mut v = decoded(&normal, key).await;
         let r = request(&v, true, 5_000_000);
@@ -390,10 +394,13 @@ async fn captured_outputs_and_former_common_mid_overquotes_are_bounded() {
         (2, 1, 406_715_349, 0, 429_724_357),
         (0, 4, 346_554_022, 320_644_986, 320_592_122),
         (2, 8, 480_611_111, 507_192_066, 506_741_449),
+        // The upgraded mint caps shares by contributed collateral. Better
+        // actual sell prices incur more fees than the worst-mid model did.
+        (1, 32, 3_981_896_896, 3_881_407_094, 3_881_406_060),
     ] {
         let (file, market) = FIXTURES[index];
         let key = market.parse().unwrap();
-        let original = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let original = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
         let (mut changed, maker) = lock(&original, key, true).await;
         let v = decoded(&changed, key).await;
         let k = spline_key(v.state().unwrap().config.book);
@@ -482,8 +489,16 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
                     (lots as u128 * s.mark.quote_per_lot).div_ceil(s.market.leverage as u128);
                 (((deposit - 1) * 10_000) / (10_000 - s.market.mint_fee_bps as u128) + 1) as u64
             } else {
-                (lots as u128 * s.market.shares as u128)
-                    .div_ceil(s.position.base.unsigned_abs() as u128) as u64
+                let (mut a, mut b) = (lo, hi.saturating_add(1));
+                while a < b {
+                    let m = a + (b - a) / 2;
+                    if m <= hi && ocelot::quote::order(s, m, false).unwrap().lots < lots {
+                        a = m + 1;
+                    } else {
+                        b = m;
+                    }
+                }
+                a
             }
         };
         let mut amounts = BTreeSet::new();
@@ -528,6 +543,7 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
         let (mut quotes, mut comparisons, mut over, mut failures, mut holes) =
             (0u64, 0u64, 0u64, 0u64, 0u64);
         let (mut max_over, mut max_under) = (0f64, 0f64);
+        let mut max_under_input_ge_one_token = 0f64;
         let mut worst = None;
         let mut previous = None;
         for amount in amounts {
@@ -553,9 +569,13 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
                                 worst = Some((amount, q.expected_output, e.output));
                             }
                         } else {
-                            max_under = max_under.max(
-                                (e.output - q.expected_output) as f64 * 10_000.0 / e.output as f64,
-                            );
+                            let under =
+                                (e.output - q.expected_output) as f64 * 10_000.0 / e.output as f64;
+                            max_under = max_under.max(under);
+                            if amount >= 1_000_000 {
+                                max_under_input_ge_one_token =
+                                    max_under_input_ge_one_token.max(under);
+                            }
                         }
                     }
                     Err(e) => {
@@ -568,7 +588,7 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
         }
         println!(
             "MIDPOINT {}",
-            serde_json::json!({"case":label,"mint":mint,"lo":lo,"hi":hi,"stride":stride,"quotes":quotes,"comparisons":comparisons,"overquotes":over,"execution_failures":failures,"range_holes":holes,"max_over_bps":max_over,"max_under_bps":max_under,"worst":worst})
+            serde_json::json!({"case":label,"mint":mint,"lo":lo,"hi":hi,"stride":stride,"quotes":quotes,"comparisons":comparisons,"overquotes":over,"execution_failures":failures,"range_holes":holes,"max_over_bps":max_over,"max_under_bps":max_under,"max_under_bps_input_ge_one_token":max_under_input_ge_one_token,"worst":worst})
         );
         assert_eq!(holes, 0);
         assert_eq!((over, failures), (0, 0), "worst-mid execution regression");
@@ -606,7 +626,7 @@ async fn production_execution_sweep() {
     } else {
         for (file, market) in FIXTURES {
             let key = market.parse().unwrap();
-            let original = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+            let original = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
             for raise in [false, true] {
                 let (locked, maker) = lock(&original, key, raise).await;
                 let v = decoded(&locked, key).await;
@@ -645,6 +665,7 @@ async fn benchmark_midpoint_quote_and_refresh() {
         let requests = [request(&v, true, 1_000_000), request(&v, false, 1_000_000)];
         let mut quote_ns = Vec::new();
         let mut refresh_us = Vec::new();
+        let mut bounds_us = Vec::new();
         for _ in 0..3 {
             v.update_state(&cache).await.unwrap();
         }
@@ -657,12 +678,17 @@ async fn benchmark_midpoint_quote_and_refresh() {
             let now = Instant::now();
             v.update_state(&cache).await.unwrap();
             refresh_us.push(now.elapsed().as_secs_f64() * 1e6);
+            let now = Instant::now();
+            black_box(v.bounds(0, 1).unwrap());
+            black_box(v.bounds(1, 0).unwrap());
+            bounds_us.push(now.elapsed().as_secs_f64() * 1e6);
         }
         quote_ns.sort_by(f64::total_cmp);
         refresh_us.sort_by(f64::total_cmp);
+        bounds_us.sort_by(f64::total_cmp);
         println!(
             "MIDPOINT_BENCH {}",
-            serde_json::json!({"file":file,"market":market,"quote_batch_mean_ns":{"p50":quote_ns[49],"p99":quote_ns[98],"max":quote_ns[99]},"refresh_us":{"p50":refresh_us[49],"p99":refresh_us[98],"max":refresh_us[99]},"samples":100})
+            serde_json::json!({"file":file,"market":market,"quote_batch_mean_ns":{"p50":quote_ns[49],"p99":quote_ns[98],"max":quote_ns[99]},"refresh_us":{"p50":refresh_us[49],"p99":refresh_us[98],"max":refresh_us[99]},"both_bounds_us":{"p50":bounds_us[49],"p99":bounds_us[98],"max":bounds_us[99]},"samples":100})
         );
         assert!(quote_ns[98] < 1_000.0);
     }

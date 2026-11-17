@@ -23,6 +23,30 @@ use titan_integration_template::{
 pub const ROUTER: Pubkey = Pubkey::from_str_const("T1TANpTeScyeqVzzgNViGDNrkQ6qHz9KrSBS4aNXvGT");
 pub struct Snapshot(pub HashMap<Pubkey, Option<Account>>);
 impl Snapshot {
+    /// Historical market accounts with ONLY Ocelot's executable replaced by the
+    /// hash-pinned November 17 release. Not a fresh live capture.
+    pub fn current(path: &Path) -> Self {
+        use sha2::Digest;
+        let mut snapshot = Self::read(path);
+        let mut elf = Vec::new();
+        flate2::read::GzDecoder::new(
+            &include_bytes!("../fixtures/ocelot-mainnet-20261117.so.gz")[..],
+        )
+        .read_to_end(&mut elf)
+        .unwrap();
+        assert_eq!(
+            format!("{:x}", sha2::Sha256::digest(&elf)),
+            "6acccee270bf0892e08e4366b53edf22814b595256c81f819bb9f1f0c4e505d8"
+        );
+        let program = snapshot.0[&titan_integration_template::ocelot::PROGRAM_ID]
+            .as_ref()
+            .unwrap();
+        let key = Pubkey::new_from_array(program.data[4..36].try_into().unwrap());
+        let data = &mut snapshot.0.get_mut(&key).unwrap().as_mut().unwrap().data;
+        data.truncate(45);
+        data.extend_from_slice(&elf);
+        snapshot
+    }
     pub fn read(path: &Path) -> Self {
         let mut entries = HashMap::new();
         if path.is_file() {

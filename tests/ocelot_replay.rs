@@ -22,13 +22,15 @@ async fn deployed_program_replay_and_router_guards() {
         replay("tests/fixtures/sol2s-465928707.bin.gz", SHORT).await;
         replay("tests/fixtures/sol3l-467430913.bin.gz", LONG).await;
         replay("tests/fixtures/sol2s-467431351.bin.gz", SHORT).await;
+        replay("tests/fixtures/sol-normal-470602378.bin.gz", LONG).await;
+        replay("tests/fixtures/sol-normal-470602378.bin.gz", SHORT).await;
     }
 }
 const LONG: &str = "AuvLduWd2g2kmD4kLTGH4c3jf7XqfA9qBUDb4Lmps7kM";
 const SHORT: &str = "CNEcZ2Cf6bqQTb8r9BSyZQb8o47Qa6Fd72Z1dj5BDGqp";
 async fn replay(folder: &str, market: &str) {
     let market: Pubkey = market.parse().unwrap();
-    let cache = support::Snapshot::read(Path::new(&folder));
+    let cache = support::Snapshot::current(Path::new(&folder));
     let mut venue =
         OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())
             .unwrap();
@@ -43,7 +45,15 @@ async fn replay(folder: &str, market: &str) {
         } else {
             vec![10_000_000.min(supply), 1_000_000_000.min(supply), supply]
         };
+        let (lo, hi) = if mint {
+            venue.bounds(0, 1)
+        } else {
+            venue.bounds(1, 0)
+        }
+        .unwrap();
+        amounts.extend([lo, lo + (hi - lo) / 2, hi]);
         amounts.sort_unstable();
+        let mut accepted = 0;
         amounts.dedup();
         for amount in amounts {
             let (input_mint, output_mint) = if mint {
@@ -57,7 +67,18 @@ async fn replay(folder: &str, market: &str) {
                 amount,
                 swap_type: SwapType::ExactIn,
             };
-            let native = venue.quote(request.clone()).unwrap();
+            let native = match venue.quote(request.clone()) {
+                Ok(q) => q,
+                Err(e) => {
+                    assert!(amount < lo || amount > hi, "advertised route rejected: {e}");
+                    assert!(
+                        !mint && e.to_string().contains("V4 retained risk exceeded"),
+                        "unexpected rejection: {e}"
+                    );
+                    continue;
+                }
+            };
+            accepted += 1;
             let direct = venue.reference_quote(&request).expect("direct replay");
             assert!(native.expected_output <= direct.output);
             assert!(direct.output > 0);
@@ -137,6 +158,10 @@ async fn replay(folder: &str, market: &str) {
                 );
             }
         }
+        assert!(
+            accepted >= 3,
+            "must replay both routing endpoints and the midpoint"
+        );
     }
     // Refresh failure must invalidate the previously loaded execution oracle.
     let mut broken = cache;
@@ -159,20 +184,20 @@ async fn pinned_execution_outputs_and_non_monotone_lot_boundaries() {
             "sol3l-465928618.bin.gz",
             LONG,
             9_263_379,
-            10_726_165,
+            10_730_191,
             601_135,
             566_096,
         ),
         (
             "sol2s-465928707.bin.gz",
             SHORT,
-            9_752_004,
+            9_747_708,
             10_196_606,
             901_901,
             845_852,
         ),
     ] {
-        let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
         let market: Pubkey = key.parse().unwrap();
         let mut venue =
             OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())
@@ -198,12 +223,13 @@ async fn pinned_execution_outputs_and_non_monotone_lot_boundaries() {
                 venue.reference_quote(&request(10_000_000)).unwrap().output,
                 expected
             );
-            let a = venue.reference_quote(&request(boundary - 1)).unwrap();
-            let b = venue.reference_quote(&request(boundary)).unwrap();
-            assert!(
-                a.output > b.output,
-                "fixture must reproduce Titan's monotonicity incompatibility"
-            );
+            if mint {
+                let a = venue.reference_quote(&request(boundary - 1)).unwrap();
+                let b = venue.reference_quote(&request(boundary)).unwrap();
+                assert!(a.output > b.output, "mint retains whole-lot steps");
+            }
+            // V4 no longer uses V3's proportional redemption lot boundaries.
+            // V4 planner transitions are covered in ocelot_curve and ocelot_upgrade.
             assert!(venue.quote(request(10_000_000)).unwrap().expected_output <= expected);
         }
     }

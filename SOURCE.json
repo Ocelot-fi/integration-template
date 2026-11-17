@@ -1,15 +1,15 @@
 {
-  "ocelot_source_commit": "f14135fc3bac75bd1aaeac3e744489b83e7e7816",
-  "runtime_commit": "f14135fc3bac75bd1aaeac3e744489b83e7e7816",
+  "ocelot_source_commit": "3add741ce14f68a1b4f35546b796b05cff052270",
+  "runtime_commit": "3add741ce14f68a1b4f35546b796b05cff052270",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Production worst-mid promotion: highest live maker midpoint for buys, lowest for sells; extra five-bp output multiplier removed. Normal quotes and instruction encoding unchanged. Current execution/shape/timing validation; no activation.",
+  "review_scope": "Compatibility with deployed November 17 Ocelot release: V4 cash-first redemption, contributed-collateral mint cap, finance IOC policy and post-trade risk; revised conservative curves and bounds. Template router allowlist updated. No activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
     "purpose": "Titan venue integration; upstream common quote and route tests retained"
   },
-  "exported_at": "2026-11-16",
+  "exported_at": "2026-11-17",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "bf39c48a30e2e0db5213d79c9b4ce109b5aaa74b"
+  "previous_runtime_commit": "f14135fc3bac75bd1aaeac3e744489b83e7e7816"
 }

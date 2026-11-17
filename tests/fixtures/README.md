@@ -2,8 +2,9 @@
 
 These gzip archives contain captured public Solana accounts, including deployed
 programdata, not wallets or private signing material. They are used only in a
-local bank with synthetic user balances. The captured Ocelot and Phoenix state
-is left unchanged in parity tests; negative tests fork it explicitly.
+local bank with synthetic user balances. Historical archives stay unchanged. Current-release replay uses
+`Snapshot::current` to replace only their Ocelot executable payload in memory;
+this is historical state with new code. Negative tests fork state explicitly.
 
 See [the verification record](../../HANDOFF.md)
 for capture slots, executable/fixture hashes, outputs, limitations, and the
@@ -21,3 +22,9 @@ Adjacent JSON files record account counts and executable/fixture hashes.
 `sol-book-window-2026-11-12.jsonl` is the short 120-observation live window;
 observation counts are not a time-weighted availability estimate. See
 [current midpoint validation](../../MIDPOINT_VALIDATION.md).
+
+The November 17 compatibility update adds `ocelot-mainnet-20261117.so.gz`
+(hash-pinned deployed Ocelot release) and the unmodified coherent capture
+`sol-normal-470602378.bin.gz`, with both SOL token markets. The upgrade test
+replays that fresh capture directly. See [release evidence](../../PROGRAM_UPGRADE_2026_11_17.md)
+for exact hashes, current-code replay semantics, coverage and limitations.

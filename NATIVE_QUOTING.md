@@ -1,4 +1,12 @@
-# Native quoting implementation, updated 16 November 2026
+# Native quoting implementation, updated 17 November 2026
+
+**Current release:** [November 17 program compatibility](PROGRAM_UPGRADE_2026_11_17.md)
+updates mint accounting, V4 cash-first redemption, finance/range checks and the
+router's instruction allowlist. Its validation supersedes the numerical results
+below. No Ocelot deployment or Titan activation is included.
+
+## November 16 checkpoint
+
 
 The default locked/crossed-book path now uses **side-specific worst-mid pricing**:
 highest live maker midpoint for buys, lowest for sells, with **no extra 5 bp

@@ -37,11 +37,13 @@ pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
     let (sell_mid, buy_mid) = raw
         .live_mid_bounds()
         .ok_or(invalid("locked spline book has no live maker midpoint"))?;
-    let sell = Arc::new(recenter(s, key, sell_mid)?.with_full_exit_price_bounds(bid, ask));
+    let sell = Arc::new(
+        recenter(s, key, sell_mid, bid.max(buy_mid))?.with_full_exit_price_bounds(bid, ask),
+    );
     let buy = if buy_mid == sell_mid {
         sell.clone()
     } else {
-        Arc::new(recenter(s, key, buy_mid)?.with_full_exit_price_bounds(bid, ask))
+        Arc::new(recenter(s, key, buy_mid, bid.max(buy_mid))?.with_full_exit_price_bounds(bid, ask))
     };
     log::debug!(
         "Ocelot worst-mid model: market={} bid={bid} ask={ask} buy_mid={buy_mid} sell_mid={sell_mid}",
@@ -54,7 +56,7 @@ pub(super) fn prepare(s: &State) -> Result<Arc<dyn PhoenixQuoter>> {
     }))
 }
 
-fn recenter(s: &State, key: Pubkey, mid: u64) -> Result<NativePhoenix> {
+fn recenter(s: &State, key: Pubkey, mid: u64, sell_fee_ticks: u64) -> Result<NativePhoenix> {
     let mut model = s.clone();
     let data = &mut model
         .accounts
@@ -72,7 +74,7 @@ fn recenter(s: &State, key: Pubkey, mid: u64) -> Result<NativePhoenix> {
     // The venue retains the original State. Native validation, maker/taker
     // risk, FIFO reserves, fee and withdrawal checks run on this model, but
     // recentering does not certify their accuracy versus Phoenix slide prices.
-    NativePhoenix::prepare(&model)
+    NativePhoenix::prepare_with_mint_fee_bound(&model, Some(sell_fee_ticks))
 }
 
 struct MidpointPhoenix {

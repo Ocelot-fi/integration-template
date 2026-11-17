@@ -47,7 +47,7 @@ const FIXTURES: [(&str, &str); 8] = [
     ),
 ];
 async fn fixture(file: &str, key: &str) -> (OcelotVenue, support::Snapshot) {
-    let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
     let market = key.parse().unwrap();
     let mut v =
         OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())

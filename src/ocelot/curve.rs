@@ -177,6 +177,29 @@ impl Curve {
         })
     }
 
+    /// First positive integer output of every supporting line. Conservative
+    /// rounding can exclude dust even when the exact issuer pays one atom.
+    pub fn minimum_input(&self) -> Result<u64> {
+        let mut minimum = 1u64;
+        for line in &self.lines {
+            if line.intercept >= 1 {
+                continue;
+            }
+            let n = U256::from(
+                1i128
+                    .checked_sub(line.intercept)
+                    .ok_or(invalid("curve minimum overflow"))? as u128,
+            ) << 64;
+            let d = U256::from(line.slope);
+            let x = n / d + U256::from(u8::from(!(n % d).is_zero()));
+            if x > U256::from(u64::MAX) {
+                return Err(invalid("curve minimum exceeds input range"));
+            }
+            minimum = minimum.max(x.as_u64());
+        }
+        Ok(minimum)
+    }
+
     pub fn segment_count(&self) -> usize {
         self.lines.len()
     }
@@ -253,6 +276,98 @@ impl Curve {
                 product(&[wide_add(product(&[k, negative])?, required_offset)?, scale])?,
             )?;
         }
+        // The upgraded mint checks margin again at Phoenix's recomputed mark.
+        // For each endpoint, bound the coefficient of n using its whole-lot
+        // interval z-1 <= n <= z+L/M (upper shift is zero with no issuer fee).
+        let (equity, supply) = if s.market.shares == 0 {
+            (1i128, 1i128)
+        } else {
+            ((s.gross - s.liability) as i128, s.market.shares as i128)
+        };
+        let captured =
+            i128::try_from(s.mark.quote_per_lot).map_err(|_| invalid("mint mark overflow"))?;
+        let side = s.position.base.signum();
+        let side = if side == 0 {
+            if s.market.long { 1i128 } else { -1i128 }
+        } else {
+            side as i128
+        };
+        for mark in [s.live_mark_bounds.0, s.live_mark_bounds.1] {
+            let mark = i128::try_from(mark).map_err(|_| invalid("live mark overflow"))?;
+            for (a, notional, minimum) in [
+                (1i128, 0i128, limits.min_venue_equity.max(1) as i128),
+                (limits.max_venue_leverage_bps as i128, BPS, 0),
+            ] {
+                let t = sub(
+                    mul(mul(a, side)?, sub(mark, captured)?)?,
+                    mul(notional, mark)?,
+                )?;
+                let base_constant = sub(
+                    add(
+                        mul(a, (s.gross - limits.cash) as i128)?,
+                        mul(s.position.base.unsigned_abs() as i128, t)?,
+                    )?,
+                    minimum,
+                )?;
+                let shift = if t < 0 && s.market.mint_fee_bps != 0 {
+                    mul(t, s.market.leverage as i128)?
+                } else if t > 0 {
+                    mul(-t, captured)?
+                } else {
+                    0
+                };
+                let constant_n = add(mul(base_constant, captured)?, shift)?;
+                for line in &self.lines {
+                    let coefficient = product(&[
+                        U256::from(t.unsigned_abs()),
+                        U256::from(net as u128),
+                        U256::from(s.market.leverage),
+                        U256::from(supply as u128),
+                        scale,
+                    ])?;
+                    let positive = product(&[
+                        U256::from(a as u128),
+                        U256::from(equity as u128),
+                        U256::from(line.slope),
+                        U256::from(BPS as u128),
+                        U256::from(captured as u128),
+                    ])?;
+                    let constant = add(
+                        mul(constant_n, supply)?,
+                        mul(mul(mul(a, equity)?, line.intercept)?, captured)?,
+                    )?;
+                    let constant = product(&[
+                        U256::from(constant.unsigned_abs()),
+                        scale,
+                        U256::from(BPS as u128),
+                    ])?;
+                    // Recompute sign separately: all wide products are unsigned.
+                    let constant_signed = add(
+                        mul(constant_n, supply)?,
+                        mul(mul(mul(a, equity)?, line.intercept)?, captured)?,
+                    )?;
+                    intersect(
+                        &mut range,
+                        if t > 0 {
+                            wide_add(positive, coefficient)?
+                        } else {
+                            positive
+                        },
+                        if t < 0 { coefficient } else { U256::zero() },
+                        if constant_signed >= 0 {
+                            constant
+                        } else {
+                            U256::zero()
+                        },
+                        if constant_signed < 0 {
+                            constant
+                        } else {
+                            U256::zero()
+                        },
+                    )?;
+                }
+            }
+        }
         Ok(range)
     }
 
@@ -264,6 +379,22 @@ impl Curve {
         depth: &SplineDepth,
         fee_micro: u64,
         mint: bool,
+    ) -> Result<Option<Self>> {
+        Self::from_spline_depth_with_mint_fee_bound(
+            s,
+            depth,
+            fee_micro,
+            mint,
+            depth.best_bid().unwrap_or(0),
+        )
+    }
+
+    pub(super) fn from_spline_depth_with_mint_fee_bound(
+        s: &State,
+        depth: &SplineDepth,
+        fee_micro: u64,
+        mint: bool,
+        sell_fee_ticks: u64,
     ) -> Result<Option<Self>> {
         if fee_micro >= MICRO as u64
             || s.mark.quote_per_lot == 0
@@ -285,6 +416,11 @@ impl Curve {
         let net = BPS - fee as i128;
         let base = s.position.base.unsigned_abs() as i128;
         let mut lines = Vec::new();
+        if !mint && super::quote::funded_collateral(s)? < 0 {
+            // The pro-rata upper bound below assumes nonnegative settled collateral.
+            // Negative collateral needs an additional realization bound.
+            return Ok(None);
+        }
         if !mint {
             // Partial redemptions never credit positive fill-vs-mark gains.
             // floor(gross*x/S)-floor(liability*x/S) >= equity*x/S - 1.
@@ -320,6 +456,20 @@ impl Curve {
                     add(sub(mul(price_atoms, factor)?, mul(mark, MICRO)?)?, levy)?,
                     mul(quote_intercept, factor)?,
                 )
+            } else if mint {
+                (
+                    add(
+                        add(
+                            mul(sub(mark, price_atoms)?, MICRO)?,
+                            mul(
+                                mul(sell_fee_ticks as i128, s.config.tick_size as i128)?,
+                                fee_micro as i128,
+                            )?,
+                        )?,
+                        levy,
+                    )?,
+                    mul(-quote_intercept, MICRO)?,
+                )
             } else {
                 (
                     add(sub(mul(mark, MICRO)?, mul(price_atoms, factor)?)?, levy)?,
@@ -328,52 +478,80 @@ impl Curve {
             };
             // (c*n+b)/MICRO is a supporting line of convex cost C(n).
             // C bounds rounded fees: ceil(Q*f)+n-1 <= Q*f+n for n >= 1.
-            let line = if mint {
-                let leverage = s.market.leverage as i128;
-                let (numerator, denominator) = if shares == 0 {
-                    (1, 1)
-                } else {
-                    (shares, equity)
-                };
-                // d=ceil(net*x/BPS); n=floor(d*L/mark).
-                // n lies in [z-1,z+L/mark], z=net*x*L/(BPS*mark).
-                // With zero issuer fee, d=x exactly and the upper shift is zero.
-                let shift = if c < 0 {
-                    mul(-c, mark)?
-                } else if fee != 0 {
-                    mul(c, leverage)?
-                } else {
-                    0
-                };
-                Line::new(
-                    mul(
-                        mul(numerator, net)?,
-                        sub(mul(mark, MICRO)?, mul(c, leverage)?)?,
-                    )?,
-                    mul(mul(mul(denominator, BPS)?, mark)?, MICRO)?,
-                    mul(-numerator, add(mul(b, mark)?, shift)?)?,
-                    mul(mul(denominator, mark)?, MICRO)?,
-                )?
+            // Issuance is capped by both captured-mark equity AND settled collateral.
+            // The second cost envelope removes favorable execution gains from shares.
+            let collateral_cost = if buy {
+                (
+                    add(mul(price_atoms, fee_micro as i128)?, levy)?,
+                    mul(quote_intercept, fee_micro as i128)?,
+                )
             } else {
-                // Only abandoned supply can make the final circulating exit use
-                // ceil(base*x/S), rather than floor. Bound that extra lot too.
-                let ceil_exit = s.actual_supply < s.market.shares
-                    && !(base as u128 * s.actual_supply as u128).is_multiple_of(shares as u128);
-                let shift = if c < 0 {
-                    -c
-                } else if ceil_exit {
-                    c
-                } else {
-                    0
-                };
-                Line::new(
-                    mul(net, sub(mul(equity, MICRO)?, mul(c, base)?)?)?,
-                    mul(mul(BPS, shares)?, MICRO)?,
-                    mul(-net, add(add(b, shift)?, MICRO)?)?,
-                    mul(BPS, MICRO)?,
-                )?
+                // Better actual sell fills can incur MORE fees. Issued shares
+                // are capped by contributed collateral, so reserve fees at an
+                // upper price bound, independently of the lower sale proceeds.
+                (
+                    add(
+                        mul(
+                            mul(sell_fee_ticks as i128, s.config.tick_size as i128)?,
+                            fee_micro as i128,
+                        )?,
+                        levy,
+                    )?,
+                    0,
+                )
             };
-            lines.push(line);
+            for (c, b) in std::iter::once((c, b)).chain(mint.then_some(collateral_cost)) {
+                if !mint && c <= 0 {
+                    continue;
+                }
+                let line = if mint {
+                    let leverage = s.market.leverage as i128;
+                    let (numerator, denominator) = if shares == 0 {
+                        (1, 1)
+                    } else {
+                        (shares, equity)
+                    };
+                    // d=ceil(net*x/BPS); n=floor(d*L/mark).
+                    // n lies in [z-1,z+L/mark], z=net*x*L/(BPS*mark).
+                    // With zero issuer fee, d=x exactly and the upper shift is zero.
+                    let shift = if c < 0 {
+                        mul(-c, mark)?
+                    } else if fee != 0 {
+                        mul(c, leverage)?
+                    } else {
+                        0
+                    };
+                    Line::new(
+                        mul(
+                            mul(numerator, net)?,
+                            sub(mul(mark, MICRO)?, mul(c, leverage)?)?,
+                        )?,
+                        mul(mul(mul(denominator, BPS)?, mark)?, MICRO)?,
+                        mul(-numerator, add(mul(b, mark)?, shift)?)?,
+                        mul(mul(denominator, mark)?, MICRO)?,
+                    )?
+                } else {
+                    // With nonnegative funded collateral, V4 closes no more than
+                    // B*x/S + 1 + B/net lots. The last term covers the difference
+                    // between the separately rounded gross and fee claims; it is
+                    // unnecessary when liability is zero. Cash-first payment and
+                    // admission bands can only reduce the required close.
+                    // Use max(C(n),0): favorable execution never lowers partial
+                    // payout, and its negative-slope supporting lines have b <= 0.
+                    let rounding = if s.liability == 0 {
+                        equity
+                    } else {
+                        add(equity, base)?
+                    };
+                    Line::new(
+                        mul(net, sub(mul(equity, MICRO)?, mul(c, base)?)?)?,
+                        mul(mul(BPS, shares)?, MICRO)?,
+                        mul(-net, add(mul(add(b, MICRO)?, equity)?, mul(c, rounding)?)?)?,
+                        mul(mul(BPS, MICRO)?, equity)?,
+                    )?
+                };
+                lines.push(line);
+            }
             previous_lots = lots as i128;
             previous_quote = mul(
                 i128::try_from(tick_lots).map_err(|_| invalid("curve depth overflow"))?,

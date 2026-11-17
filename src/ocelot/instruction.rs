@@ -1,4 +1,4 @@
-//! Exact v3 instruction encoding and account order. The runtime must spend the quoted input.
+//! V3 mint / V4 redemption instruction encoding and account order. The runtime must spend the quoted input.
 use super::{
     codec::{Result, invalid},
     *,
@@ -37,7 +37,7 @@ pub fn encode(
     let mut d = discriminator(if mint {
         "global:phoenix_mint_v3"
     } else {
-        "global:phoenix_redeem_v3"
+        "global:phoenix_redeem_v4"
     })
     .to_vec();
     d.extend(amount.to_le_bytes());

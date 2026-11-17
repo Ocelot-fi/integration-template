@@ -55,6 +55,7 @@ pub struct Market {
     pub mint: Pubkey,
     pub fees: Pubkey,
     pub leverage: u8,
+    pub rebalance_band_bps: u16,
     pub long: bool,
     pub paused: bool,
     pub deposits_paused: bool,
@@ -98,6 +99,7 @@ impl Market {
             mint,
             fees: key(d, 200)?,
             leverage: d[236],
+            rebalance_band_bps: u16_at(d, 245)?,
             long: boolean(d, 237)?,
             paused: boolean(d, 271)?,
             deposits_paused: flags & 256 != 0,
@@ -278,6 +280,63 @@ pub fn gross(p: Position, mark: Mark, cash: u64) -> Result<u64> {
     }
     u64::try_from(venue + cash as i128).map_err(|_| invalid("gross equity overflow"))
 }
+/// Bound recomputed marks for the oracle-anchored weighted-median profile.
+/// Oracle responses and their spot EMA are fixed during an order. The book
+/// may change, but with less than half the weight it cannot move the median
+/// outside the oracle-component hull. Include the captured mark as well.
+pub fn live_mark_bounds(
+    value: &Account,
+    c: &Config,
+    mark: Mark,
+    slot: u64,
+) -> Result<(u128, u128)> {
+    let d = &value.data;
+    let count = u32::from_le_bytes(bytes(d, 32)?) as usize;
+    for i in 0..count {
+        let o = 64 + i * 1584;
+        let asset = u16_at(d, o + 944)? as u64 | ((u16_at(d, o + 948)? as u64) << 16);
+        if d[o + 1450] != 0 || asset != c.asset {
+            continue;
+        }
+        let sw = u64_at(d, o + 112)? as u128;
+        let pw = u64_at(d, o + 248)? as u128;
+        if sw + pw == 0 || u64_at(d, o + 280)? as u128 >= sw + pw {
+            return Err(invalid("unreviewed book-dominant post-trade mark"));
+        }
+        let mut low = mark.ticks;
+        let mut high = mark.ticks;
+        let ema = i64_at(d, o + 136)? as i128;
+        for (offset, threshold, weight, adjustment) in [(40, 120, sw, ema), (176, 256, pw, 0)] {
+            if weight == 0 {
+                continue;
+            }
+            for j in 0..5 {
+                let p = u64_at(d, o + offset + 16 * j)?;
+                let observed = u64_at(d, o + offset - 8 + 16 * j)?;
+                if p == 0
+                    || observed > slot
+                    || slot - observed >= u64_at(d, o + threshold)?
+                    || d[o + 640 + 40 * j] != 0
+                {
+                    continue;
+                }
+                let p = u64::try_from(p as i128 + adjustment)
+                    .map_err(|_| invalid("invalid adjusted oracle price"))?;
+                low = low.min(p);
+                high = high.max(p);
+            }
+        }
+        if low == 0 {
+            return Err(invalid("zero live mark bound"));
+        }
+        return Ok((
+            low as u128 * c.tick_size as u128,
+            high as u128 * c.tick_size as u128,
+        ));
+    }
+    Err(invalid("missing live mark bounds"))
+}
+
 pub fn accrued_liability(m: &Market, gross: u64, now: i64) -> Result<u64> {
     const DENOM: u128 = 10_000 * 365 * 24 * 60 * 60;
     if now < m.fee_timestamp || m.remainder as u128 >= DENOM {

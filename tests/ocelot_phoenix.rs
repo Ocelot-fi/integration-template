@@ -4,6 +4,8 @@
 mod support;
 use solana_pubkey::Pubkey;
 use std::path::Path;
+#[cfg(feature = "reference-simulation")]
+use titan_integration_template::ocelot::quote::PhoenixQuoter;
 use titan_integration_template::{
     ocelot::{self, OcelotVenue, USDC},
     trading_venue::{FromAccount, QuoteRequest, SwapType, TradingVenue},
@@ -38,7 +40,7 @@ async fn load(cache: &support::Snapshot, key: Pubkey) -> OcelotVenue {
 }
 async fn fixture(i: usize) -> (OcelotVenue, support::Snapshot) {
     let (file, key) = FIXTURES[i];
-    let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
     (load(&cache, key.parse().unwrap()).await, cache)
 }
 fn request(v: &OcelotVenue, mint: bool, amount: u64) -> QuoteRequest {
@@ -309,6 +311,11 @@ async fn zero_weight_oracles_still_require_freshness() {
                     .as_mut()
                     .unwrap();
                 put64(&mut a.data, o + weight, 0);
+                if count != 1 {
+                    // Keep the recomputed mark oracle-anchored while testing a
+                    // zero-weight oracle's independent freshness requirement.
+                    put64(&mut a.data, o + 280, 0);
+                }
                 for k in 0..count {
                     put64(&mut a.data, o + start + 16 * k, s.clock.slot - age);
                 }
@@ -375,6 +382,7 @@ async fn complete_native_quotes_do_not_overquote_captured_execution() {
     for (i, _) in FIXTURES.iter().enumerate() {
         let (mut v, cache) = fixture(i).await;
         v.load_reference_oracle(&cache).await.unwrap();
+        let native = ocelot::phoenix::NativePhoenix::prepare(v.state().unwrap()).unwrap();
         let mut successes = 0;
         let mut declines = 0;
         let mut worst_bps = 0.0f64;
@@ -412,7 +420,18 @@ async fn complete_native_quotes_do_not_overquote_captured_execution() {
                 let r = request(&v, mint, amount);
                 let Ok(q) = v.quote(r.clone()) else {
                     assert!(
-                        v.reference_quote(&r).is_err(),
+                        v.reference_quote(&r).is_err()
+                            || (!mint
+                                && (amount
+                                    < native.curve(false).unwrap().minimum_input().unwrap()
+                                    || ocelot::quote::quote(
+                                        s,
+                                        ocelot::quote::Limits::load(s).unwrap(),
+                                        &native,
+                                        amount,
+                                        false
+                                    )
+                                    .is_err())),
                         "{} mint={mint} input={amount}: unclassified false decline",
                         FIXTURES[i].0
                     );
@@ -578,7 +597,20 @@ async fn native_fee_overrides_and_budget_mutations_against_execution() {
         for mint in [true, false] {
             for amount in [500_000, 10_000_000, 500_000_000] {
                 let r = request(&v, mint, amount);
-                let q = v.quote(r.clone()).unwrap();
+                let q = match v.quote(r.clone()) {
+                    Ok(q) => q,
+                    Err(e) if e.to_string().contains("V4 retained risk exceeded") => {
+                        let (lo, hi) = v.bounds(u8::from(!mint), u8::from(mint)).unwrap();
+                        assert!(
+                            amount < lo || amount > hi,
+                            "advertised range must stay executable"
+                        );
+                        continue;
+                    }
+                    Err(e) => {
+                        panic!("fee={fee} multiplier={multiplier} mint={mint} amount={amount}: {e}")
+                    }
+                };
                 let actual = v.reference_quote(&r).unwrap();
                 assert!(
                     q.expected_output <= actual.output,
@@ -856,9 +888,13 @@ async fn finance_cash_redemptions_match_execution() {
                 .unwrap();
             assert!(q.expected_output <= execution.output);
             let cash_paid = cash - ocelot::codec::u64_at(&accounts[&vault].data, 64).unwrap();
+            let fees = v.state().unwrap().market.fees;
+            let paid_fees = ocelot::codec::u64_at(&accounts[&fees].data, 64).unwrap()
+                - ocelot::codec::u64_at(&v.state().unwrap().accounts[&fees].data, 64).unwrap();
             assert_eq!(
                 cash_paid,
-                (cash as u128 * amount as u128 / v.state().unwrap().market.shares as u128) as u64
+                cash.min(execution.output + paid_fees),
+                "V4 pays cash first"
             );
             assert!(cash_paid > 0, "must exercise actual cash transfer");
         }

@@ -161,7 +161,7 @@ fn accrual_prices_accounting_supply_and_caps_fee_at_equity() {
     assert!(codec::accrued_liability(&m, 100_000_000, 0).is_err());
 }
 #[test]
-fn v3_abi_preserves_full_fill_amounts_and_output_guards() {
+fn mint_v3_redeem_v4_abi_preserves_signed_fields() {
     let order = instruction::ioc(42, 1234, true, false);
     assert_eq!(order.len(), 57);
     assert_eq!(order[0], 2);
@@ -190,7 +190,7 @@ fn v3_abi_preserves_full_fill_amounts_and_output_guards() {
     assert_eq!(order[55], 128);
     let redeem = instruction::encode(false, 10, 0, &order, [10, 12, 8], 9, 12345, 7);
     assert_eq!(redeem.len(), 112);
-    assert_eq!(&redeem[..8], &[207, 0, 207, 230, 122, 44, 120, 250]);
+    assert_eq!(&redeem[..8], &[144, 227, 99, 40, 128, 192, 209, 93]);
     assert_eq!(codec::u64_at(&redeem, 88).unwrap(), 9);
     assert_eq!(
         instruction::encode(false, 10, 0, &[], [10, 12, 8], 9, 12345, 7).len(),

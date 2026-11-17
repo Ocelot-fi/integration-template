@@ -1,5 +1,45 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## November 17 program compatibility
+
+Source `3add741ce14f68a1b4f35546b796b05cff052270` updates the host adapter and template router for the deployed
+Ocelot release `6acccee2…`. Redemption is V4 (V3 is retired); mint remains V3 with
+the contributed-collateral issuance cap. Cash-first sizing/payout, configured IOC
+limits, post-trade finance checks and conservative output/range preparation are
+updated. Worst-mid remains with no extra five-bp haircut.
+
+85 reference / 51 default / 40 shared shape and construction / 3 program tests
+pass in the source checkout. Stress sweeps have zero overquotes or failed accepted
+trades in 12,502 sampled executions plus 60 full exits, through 32-tick crossings.
+Read [current derivation, evidence and limitations](PROGRAM_UPGRADE_2026_11_17.md),
+including the conservative redemption-prefix availability cost, dust estimates
+and the supported post-trade mark premise.
+
+Titan needs to adopt the V4 discriminator in its production router and re-review
+this candidate's issuer accounting, risk bounds and advertised ranges. The new
+post-trade mark hull uses an oracle-anchored weighted-median premise that should
+also be confirmed with Phoenix; the public SDK exposes layout, not its evaluator.
+Host/cache/Clock delivery and production route-minimum acceptance remain open.
+This is an engineering handoff, not routing activation or an Ocelot deployment.
+
+Standalone verification completed on Rust 1.96.0: **43 reference tests,
+29 default tests and 3 program/parity tests pass**. These include current-program
+mint/redeem execution, V3 retirement, rewritten V4 close quantities, 240 altered
+oracle executions, the normal quote/instruction golden, 165 routed executions,
+and the test-only final-output rollback model. No RPC-dependent acceptance tests
+are counted as successful after skipping. The separately ignored benchmark is
+reported in the source validation record.
+
+All **100 byte-identical export/source SHA-256 checks pass**, including Rust,
+fixtures, manifests/locks and the new validation report. Documentation-only links
+and handoff metadata are normalized. The independent router SBF rebuild matches
+`6af1147c0a52e823daeae02683952ebf7400a9a3397b577f1c0a8f82f5374d31` exactly. The test-only output-guard ELF is unchanged. Public export
+screening and whitespace checks pass. No private application or business notes
+are exported.
+
+## Earlier handoff evidence
+
+
 ## Worst-mid pricing in the adapter, 16 November 2026
 
 Source `f14135fc3bac75bd1aaeac3e744489b83e7e7816` promotes the worst-mid prototype into the production adapter.

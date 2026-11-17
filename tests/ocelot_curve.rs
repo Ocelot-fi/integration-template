@@ -3,15 +3,14 @@
 #[allow(dead_code)]
 mod support;
 use std::path::Path;
+use titan_integration_template::trading_venue::bounds::find_boundaries;
 use titan_integration_template::{
     ocelot::{
         OcelotVenue, USDC,
         phoenix::NativePhoenix,
         quote::{self, PhoenixQuoter},
     },
-    trading_venue::{
-        FromAccount, QuoteRequest, QuoteResult, SwapType, TradingVenue, bounds::find_boundaries,
-    },
+    trading_venue::{FromAccount, QuoteRequest, QuoteResult, SwapType, TradingVenue},
 };
 
 #[cfg(debug_assertions)]
@@ -38,7 +37,7 @@ const FIXTURES: [(&str, &str); 4] = [
 ];
 async fn fixture(i: usize) -> (OcelotVenue, support::Snapshot) {
     let (name, market) = FIXTURES[i];
-    let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(name));
+    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(name));
     let pool = market.parse().unwrap();
     let mut v = OcelotVenue::from_account(&pool, cache.0[&pool].as_ref().unwrap()).unwrap();
     v.update_state(&cache).await.unwrap();
@@ -52,6 +51,19 @@ fn request(v: &OcelotVenue, mint: bool, amount: u64) -> QuoteRequest {
         amount,
         swap_type: SwapType::ExactIn,
     }
+}
+fn redemption_edge(s: &titan_integration_template::ocelot::State, lots: u64) -> u64 {
+    let limits = quote::Limits::load(s).unwrap();
+    let (mut lo, mut hi) = (1, s.actual_supply + 1);
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if quote::redemption_lots(s, limits, mid).unwrap_or(0) >= lots {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    lo
 }
 fn check_chord(a: &QuoteResult, b: &QuoteResult) {
     assert!(
@@ -92,7 +104,7 @@ async fn every_fixture_lot_edge_is_monotone_concave_and_below_native_output() {
         let limits = quote::Limits::load(s).unwrap();
         let native = NativePhoenix::prepare(s).unwrap();
         for mint in [true, false] {
-            let raw = |amount| {
+            let raw = |amount| -> titan_integration_template::ocelot::codec::Result<QuoteResult> {
                 let out = quote::quote(s, limits, &native, amount, mint)?;
                 let r = request(&v, mint, amount);
                 Ok(QuoteResult {
@@ -104,7 +116,11 @@ async fn every_fixture_lot_edge_is_monotone_concave_and_below_native_output() {
                     price: out.price,
                 })
             };
-            let (lo, hi) = find_boundaries(&raw).unwrap();
+            let (raw_lo, mut hi) = find_boundaries(&raw).unwrap();
+            if !mint {
+                hi = s.actual_supply;
+            }
+            let lo = raw_lo.max(native.curve(mint).unwrap().minimum_input().unwrap());
             let first_lot = quote::order(s, lo, mint).unwrap().lots;
             let last_lot = quote::order(s, hi, mint).unwrap().lots;
             let mut amounts = vec![lo, hi];
@@ -114,8 +130,7 @@ async fn every_fixture_lot_edge_is_monotone_concave_and_below_native_output() {
                         (lots as u128 * s.mark.quote_per_lot).div_ceil(s.market.leverage as u128);
                     (((deposit - 1) * 10_000) / (10_000 - s.market.mint_fee_bps as u128) + 1) as u64
                 } else {
-                    (lots as u128 * s.market.shares as u128)
-                        .div_ceil(s.position.base.unsigned_abs() as u128) as u64
+                    redemption_edge(s, lots)
                 };
                 // Both sides of every lot jump, plus interior points.
                 amounts.extend([
@@ -127,7 +142,7 @@ async fn every_fixture_lot_edge_is_monotone_concave_and_below_native_output() {
                 ]);
             }
             let mut seed = 0x58123498_u64;
-            for _ in 0..4096 {
+            for _ in 0..32768 {
                 seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
                 amounts.push(lo + seed % (hi - lo + 1));
             }
@@ -171,7 +186,14 @@ async fn every_fixture_lot_edge_is_monotone_concave_and_below_native_output() {
                 let amount = ((lo as f64).ln()
                     + ((hi as f64).ln() - (lo as f64).ln()) * k as f64 / 64.0)
                     .exp() as u64;
-                let q = v.quote(request(&v, mint, amount.clamp(lo, hi))).unwrap();
+                let amount = amount.clamp(lo, hi);
+                let q = match v.quote(request(&v, mint, amount)) {
+                    Ok(q) => q,
+                    Err(_) => {
+                        assert!(raw(amount).is_err());
+                        continue;
+                    }
+                };
                 check_chord(&last, &q);
                 last = q;
             }
@@ -341,7 +363,9 @@ async fn synthetic_fee_cost_sign_cash_bootstrap_and_abandoned_supply_bounds() {
                     // are small; larger fees move that sign-change boundary.
                     s.mark.ticks = if long { 10_004 } else { 9_996 };
                     s.mark.quote_per_lot = s.mark.ticks as u128 * 100;
+                    s.live_mark_bounds = (s.mark.quote_per_lot, s.mark.quote_per_lot);
                     s.position.base = if long { 6 } else { -6 };
+                    s.position.funding = s.mark.funding;
                     s.position.quote =
                         -(s.position.base as i128 * s.mark.quote_per_lot as i128) as i64;
                     s.position.collateral = 10_000_019;
@@ -417,7 +441,7 @@ async fn synthetic_fee_cost_sign_cash_bootstrap_and_abandoned_supply_bounds() {
                                     // A sub-atom conservative estimate cannot be
                                     // returned as a positive executable quote.
                                     assert!(
-                                        mode == "cash" && !mint && raw.amount <= 2,
+                                        amount < curve.minimum_input().unwrap(),
                                         "long={long} fee={fee_bps}/{phoenix_fee} mode={mode} mint={mint} input={amount} raw={}: {e}",
                                         raw.amount
                                     );
@@ -740,7 +764,9 @@ async fn curve_breakpoints_and_sizes_underquote_captured_execution() {
                 let Ok(q) = v.quote(r.clone()) else {
                     continue;
                 };
-                let executed = v.reference_quote(&r).unwrap();
+                let executed = v.reference_quote(&r).unwrap_or_else(|e| {
+                    panic!("{} mint={mint} input={amount}: {e}", FIXTURES[i].0)
+                });
                 assert!(
                     q.expected_output <= executed.output,
                     "{} mint={mint} input={amount}: {} > {}",

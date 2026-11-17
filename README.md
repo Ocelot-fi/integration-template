@@ -1,32 +1,19 @@
 # Ocelot native issuer integration for Titan
 
-**16 November: worst-mid pricing is now in the production adapter.** On raw
-locked/crossed books, buys use the highest live maker midpoint and sells use the
-lowest. There is **no additional 5 bp output discount**. Normal-book pricing and
-the ordinary conservative lot-boundary output curve are retained.
+**17 November: updated for the deployed Ocelot program upgrade.** The adapter
+and template CPI router now use V4 redemption, with cash-first minimum-lot exits,
+revised mint contribution accounting, post-trade finance guards and the configured
+IOC price policy. See [current validation and limitations](PROGRAM_UPGRADE_2026_11_17.md).
 
-The validated spline parser selects active, nonzero-mid makers with at least one
-unfilled, unexpired region on either side, before applying maker risk limits.
-Widths, offsets, fills and expiry stay intact when preparing each side's model.
-Native risk, fees, withdrawal checks, full-exit original-price reserves and the
-router's existing bounds remain active. Original account data is preserved.
+Worst-mid pricing remains active for locked/crossed books, with no extra five-bp
+haircut. `quote` is allocation-free and uses no VM or RPC. `update_state` prepares
+from Titan's coherent cached account batch. The new curves and routing ranges
+supersede the older numerical baselines; unsupported profiles still decline.
 
-See [implementation and validation](WORST_MID_VALIDATION.md). The earlier
-[common-midpoint/five-bp policy](MIDPOINT_VALIDATION.md) is historical. Its known
-overquote examples are now regression cases that must quote below actual output
-and execute successfully. Sampled comparisons do not prove every possible state.
-
-`update_state` prepares the model from Titan's supplied account snapshot;
-`quote` does no network calls, VM execution or allocation. Hawkeye is not used.
-The cache/snapshot/strict-decoding fixes remain included; see
-[cache validation](CACHE_VALIDATION.md). The bundled RPC cache is tooling and
-serializes fetches per instance; Titan supplies its production cache.
-
-The update is submitted for engineering review in
-[PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
-Titan sampler-cache confirmation, production integration acceptance and
-activation remain outstanding. ANT3L/ANT2S remain outside the validated oracle
-profile. No on-chain program or instruction-encoding changes are included.
+Submitted for engineering review in [PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
+Titan must update its production CPI allowlist to V4 and review the new issuer
+math, mark bound and routing ranges. Production host acceptance and activation
+remain outstanding; ANT remains outside the validated oracle profile.
 
 ## Earlier submission history
 
@@ -77,10 +64,10 @@ constitute integration acceptance. See [evidence and Titan questions](HANDOFF.md
   Absent requested accounts remain watched; zero supply still discovers the
   withdrawal queue and optional market throttle.
   A failed refresh invalidates prior prepared quotes and the execution oracle.
-- `phoenix_mint_v3` and `phoenix_redeem_v3` with exact input, full-fill IOC,
+- `phoenix_mint_v3` and `phoenix_redeem_v4` with exact input, full-fill IOC,
   reduce-only redemption, minimum output, deadline and finance revision guards.
 - Matching host/program `Venue::Ocelot` encoding and a CPI adapter that only
-  accepts those v3 instructions. A changed runtime input fails instead of
+  accepts V3 mint and V4 redemption instructions. A changed runtime input fails instead of
   executing an order sized for a different quote.
 - Native issuer math, shared lot sizing, prepared quote limits, and an explicit
   native Phoenix-provider interface and a bundled capacity-limited spline provider.
@@ -95,8 +82,8 @@ execution. Following Titan's November 10 guidance, `generate_swap_instruction()`
 encodes zero venue minimum and **must only be used inside a route that enforces
 the user's final minimum**. Titan confirms its production router owns that check;
 the supplied template router does not implement it. The adapter still validates
-quote eligibility, exact input, finance revision and the 100 bps IOC price band.
-Both adapter builders encode `i64::MAX` in the required v3 deadline field,
+quote eligibility, exact input, finance revision and the stricter of the finance policy and the 100 bps IOC band.
+Both adapter builders encode `i64::MAX` in the required deadline field,
 leaving transaction expiry to Titan/frontend/wallet and Solana. The on-chain
 deadline comparison is unchanged; zero would mean expired, not disabled.
 The IOC band remains separate from user slippage. See [slippage tests and production

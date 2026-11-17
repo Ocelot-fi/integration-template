@@ -1,6 +1,7 @@
 #![allow(clippy::result_large_err)]
-//! Frozen normal-book quote/instruction snapshot from upstream 035781b7.
-//! Independently compared with 0581d19: 64,716 lines, including 487 instructions.
+//! Frozen November 17 upgrade quote/instruction baseline. Numerical changes
+//! are independently exercised against the pinned deployed executable.
+//! Pre-upgrade hash: 67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe.
 #[allow(dead_code)]
 mod support;
 use solana_pubkey::Pubkey;
@@ -10,7 +11,7 @@ use titan_integration_template::{
     trading_venue::{FromAccount, QuoteRequest, SwapType, TradingVenue},
 };
 #[tokio::test]
-async fn normal_quotes_and_instructions_match_reviewed_baseline() {
+async fn normal_quotes_and_instructions_match_upgrade_baseline() {
     let mut out = String::new();
     for (file, market) in [
         (
@@ -30,7 +31,7 @@ async fn normal_quotes_and_instructions_match_reviewed_baseline() {
             "CNEcZ2Cf6bqQTb8r9BSyZQb8o47Qa6Fd72Z1dj5BDGqp",
         ),
     ] {
-        let cache = support::Snapshot::read(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
         let key: Pubkey = market.parse().unwrap();
         let mut v = OcelotVenue::from_account(&key, cache.0[&key].as_ref().unwrap()).unwrap();
         v.update_state(&cache).await.unwrap();
@@ -85,9 +86,10 @@ async fn normal_quotes_and_instructions_match_reviewed_baseline() {
             }
         }
     }
+    println!("upgrade baseline: {} records", out.lines().count());
     use sha2::{Digest, Sha256};
     assert_eq!(
         format!("{:x}", Sha256::digest(out.as_bytes())),
-        "67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe"
+        "a7bec29e5ba5364724678e0bf0dbb56b4115f170ee96adba7f1d33e50d419cb5"
     );
 }
