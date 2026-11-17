@@ -248,3 +248,19 @@ impl titan_integration_template::ocelot::quote::PhoenixQuoter for FixtureMatcher
         })
     }
 }
+
+/// Only the pinned program's execution-time retained-risk/margin checks may
+/// reject a current-state quote in these tests. Other 6050 sites (including the
+/// signed IOC guard), slippage failures and all other errors still fail tests.
+#[cfg(feature = "reference-simulation")]
+pub fn assert_execution_risk_rejection(error: &impl std::fmt::Display) {
+    let message = error.to_string();
+    assert!(message.contains("FinanceExecutionBound"), "{message}");
+    assert!(
+        message.contains("AnchorError thrown in programs/leveraged_vault/src/withdrawal.rs:92.")
+            || message.contains(
+                "AnchorError thrown in programs/leveraged_vault/src/finance_view.rs:243."
+            ),
+        "unexpected execution rejection: {message}"
+    );
+}

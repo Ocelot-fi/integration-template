@@ -1,19 +1,20 @@
 # Ocelot native issuer integration for Titan
 
-**17 November: updated for the deployed Ocelot program upgrade.** The adapter
-and template CPI router now use V4 redemption, with cash-first minimum-lot exits,
-revised mint contribution accounting, post-trade finance guards and the configured
-IOC price policy. See [current validation and limitations](PROGRAM_UPGRADE_2026_11_17.md).
+**17 November follow-up: removed speculative post-order mark prediction.**
+V4 cash-first redemption, the mint contribution cap, conservative output curves,
+worst-mid pricing and captured-state risk checks remain. The adapter no longer
+forecasts Phoenix's reference-price/EMA changes or truncates redemption ranges
+using that forecast. See [current behavior, coverage and limitations](CURRENT_STATE_QUOTING.md).
 
-Worst-mid pricing remains active for locked/crossed books, with no extra five-bp
-haircut. `quote` is allocation-free and uses no VM or RPC. `update_state` prepares
-from Titan's coherent cached account batch. The new curves and routing ranges
-supersede the older numerical baselines; unsupported profiles still decline.
+`quote` is allocation-free and uses no VM or RPC. `update_state` prepares from
+Titan's coherent cached account batch. A quote can still fail execution-time
+risk checks; Titan must simulate candidate routes and discard/rebuild failures.
+The program and final route minimum remain the execution guards.
 
 Submitted for engineering review in [PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
-Titan must update its production CPI allowlist to V4 and review the new issuer
-math, mark bound and routing ranges. Production host acceptance and activation
-remain outstanding; ANT remains outside the validated oracle profile.
+Activation remains pending: Titan's V4 CPI allowlist and production host/route
+acceptance, simulation recovery, and the separate signed IOC limit headroom issue.
+ANT remains outside the validated oracle profile. No Ocelot deployment is included.
 
 ## Earlier submission history
 

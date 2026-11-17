@@ -1,9 +1,12 @@
 # Native quoting implementation, updated 17 November 2026
 
-**Current release:** [November 17 program compatibility](PROGRAM_UPGRADE_2026_11_17.md)
-updates mint accounting, V4 cash-first redemption, finance/range checks and the
-router's instruction allowlist. Its validation supersedes the numerical results
-below. No Ocelot deployment or Titan activation is included.
+**Current candidate:** [current-state quoting](CURRENT_STATE_QUOTING.md) removes
+the speculative post-order mark/EMA forecast introduced by the
+[November 17 compatibility update](PROGRAM_UPGRADE_2026_11_17.md). V4 accounting,
+conservative curves, worst-mid pricing and captured-state risk checks remain.
+Execution-time risk rejections are measured explicitly; the earlier zero-failure
+claims below apply only to their historical candidates and tested domains.
+No Ocelot deployment or Titan activation is included.
 
 ## November 16 checkpoint
 

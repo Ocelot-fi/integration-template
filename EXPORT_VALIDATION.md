@@ -1,5 +1,31 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## November 17 current-state quoting follow-up
+
+Source `c9c62091a2c787aa76372a89dd4a3a3d76d8c548` removes the speculative post-order mark/EMA model and recursive
+redemption prefix. V4 cash-first redemption, the mint contribution cap,
+conservative output curves, worst-mid pricing and captured-state risk checks stay.
+Fresh SOL redemption ranges now reach essentially the full supply, instead of
+the former 0.954197 SOL2S / 318.027904 SOL3L prefixes.
+
+86 reference / 51 default / 40 unchanged shared shape/construction checks pass in
+the source checkout. Whole-supply coverage records 418/418 successful fresh-state
+redemptions and 806/812 historical-state executions, with six explicit risk
+rejections. No successful execution returned less than quoted. Wider crossing
+stress deliberately produces more execution-time risk rejections; they are
+counted separately. Read [the exact metrics and contract](CURRENT_STATE_QUOTING.md).
+
+Titan must simulate candidate routes and discard/rebuild failures. Its production
+V4 allowlist, final minimum and Clock/coherent-cache delivery need acceptance.
+The separate signed IOC limit headroom issue remains unresolved. The old fixed-EMA
+premise was disproved; the earlier mark-bound and restricted-range evidence below
+is historical. This is a review candidate, not routing activation or deployment.
+
+Standalone export: 42 reference tests, 25 default-feature tests, both Clippy configurations and formatting pass. All 102 byte-identical source/export hashes match. Router/guard sources and fixtures are unchanged; this host-only follow-up does not require another SBF build.
+
+## Earlier handoff evidence
+
+
 ## November 17 program compatibility
 
 Source `3add741ce14f68a1b4f35546b796b05cff052270` updates the host adapter and template router for the deployed

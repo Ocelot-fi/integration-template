@@ -105,7 +105,6 @@ pub struct State {
     pub actual_supply: u64,
     pub revision: u64,
     pub price_bps: u16,
-    pub live_mark_bounds: (u128, u128),
     pub gross: u64,
     pub liability: u64,
     pub exchange: instruction::Exchange,
@@ -250,7 +249,6 @@ fn decode_state(
     let position = codec::position(accounts.get(&c.trader).ok_or(invalid("missing child"))?, &c)?;
     let gross = codec::gross(position, mark, cash)?;
     let liability = codec::accrued_liability(&m, gross, clock.unix_timestamp)?;
-    let live_mark_bounds = codec::live_mark_bounds(read(&PERP_MAP)?, &c, mark, clock.slot)?;
     let state = State {
         market: m,
         config: c,
@@ -260,7 +258,6 @@ fn decode_state(
         actual_supply,
         revision,
         price_bps,
-        live_mark_bounds,
         gross,
         liability,
         exchange,
@@ -580,15 +577,6 @@ impl TradingVenue for OcelotVenue {
                 ..request.clone()
             })
         };
-        let (lo, hi) = bounds::find_boundaries(&accepts)?;
-        if mint {
-            Ok((lo, hi))
-        } else {
-            let matcher = self.matcher.as_deref().ok_or(invalid("missing matcher"))?;
-            Ok((
-                lo,
-                quote::redemption_prefix(state, limits, matcher, lo, hi, &|n| accepts(n).is_ok()),
-            ))
-        }
+        bounds::find_boundaries(&accepts)
     }
 }

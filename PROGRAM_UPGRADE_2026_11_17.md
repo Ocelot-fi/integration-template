@@ -1,5 +1,12 @@
 # November 17 program compatibility update
 
+> Historical checkpoint: this report describes the initial upgrade candidate.
+> The later [current-state quoting change](CURRENT_STATE_QUOTING.md) removes its
+> mark forecast and recursive redemption prefix. The fixed-through-order EMA
+> premise below was disproved by review. Its zero-failure results describe the
+> old restricted ranges, not the current candidate. Executable hashes and V4
+> accounting remain applicable.
+
 This candidate targets the Ocelot release deployed at finalized slot 470574016.
 It changes both the host adapter and the template's on-chain CPI allowlist.
 Titan must carry the V4 discriminator into its production router before enabling
@@ -69,7 +76,7 @@ This is not a blanket percentage haircut. Prior 12/24 bp headlines are not limit
 for this release. Quote-quality acceptance must use trade sizes relevant to the
 product and the newly advertised ranges, rather than those historical figures.
 
-## Supported post-trade mark profile
+## Superseded post-trade mark profile
 
 The added bound uses the oracle-anchored weighted-median model: spot plus perp
 weight must strictly exceed book weight. Eligible oracle observations and the

@@ -1,6 +1,7 @@
 #![allow(clippy::result_large_err)]
-//! Frozen November 17 upgrade quote/instruction baseline. Numerical changes
+//! Frozen November 17 current-state quote/instruction baseline. Numerical changes
 //! are independently exercised against the pinned deployed executable.
+//! Initial upgrade/mark-forecast hash: a7bec29e5ba5364724678e0bf0dbb56b4115f170ee96adba7f1d33e50d419cb5.
 //! Pre-upgrade hash: 67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe.
 #[allow(dead_code)]
 mod support;
@@ -90,6 +91,6 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
     use sha2::{Digest, Sha256};
     assert_eq!(
         format!("{:x}", Sha256::digest(out.as_bytes())),
-        "a7bec29e5ba5364724678e0bf0dbb56b4115f170ee96adba7f1d33e50d419cb5"
+        "43c34f24af5754ed44e0eb7dd177648199e628da80ecbed44a7e4ce00a2fa93b"
     );
 }

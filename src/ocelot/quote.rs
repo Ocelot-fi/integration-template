@@ -354,201 +354,8 @@ pub(crate) fn routing_redemption_cap(s: &State, _limits: Limits) -> Result<u64> 
     Ok(s.actual_supply)
 }
 
-/// Certify a contiguous routing prefix despite V4's live-mark risk islands.
-/// Each interval uses worst-case rounded claims and close counts, not sampling.
-/// Unproved intervals are subdivided; singleton quotes are checked exactly.
-/// A bounded work budget returns the already certified prefix conservatively.
-pub(crate) fn redemption_prefix(
-    s: &State,
-    limits: Limits,
-    matcher: &dyn PhoenixQuoter,
-    lo: u64,
-    hi: u64,
-    accepts: &dyn Fn(u64) -> bool,
-) -> u64 {
-    #[allow(clippy::too_many_arguments)]
-    fn visit(
-        s: &State,
-        limits: Limits,
-        matcher: &dyn PhoenixQuoter,
-        a: u64,
-        b: u64,
-        accepts: &dyn Fn(u64) -> bool,
-        budget: &mut usize,
-        end: &mut u64,
-    ) -> bool {
-        if *budget == 0 {
-            return false;
-        }
-        *budget -= 1;
-        if a == b {
-            if !accepts(a) {
-                return false;
-            }
-            *end = b;
-            return true;
-        }
-        if certify_redemption_interval(s, limits, matcher, a, b).unwrap_or(false)
-            && accepts(a)
-            && accepts(b)
-        {
-            *end = b;
-            return true;
-        }
-        let mid = a + (b - a) / 2;
-        visit(s, limits, matcher, a, mid, accepts, budget, end)
-            && visit(s, limits, matcher, mid + 1, b, accepts, budget, end)
-    }
-    let mut end = lo;
-    visit(s, limits, matcher, lo, hi, accepts, &mut 4096, &mut end);
-    end
-}
-fn certify_redemption_interval(
-    s: &State,
-    limits: Limits,
-    matcher: &dyn PhoenixQuoter,
-    a: u64,
-    b: u64,
-) -> Result<bool> {
-    let net = s.gross - s.liability;
-    let venue = s.gross - limits.cash;
-    let claim_lo = fraction(s.gross, a, s.market.shares)?;
-    let claim_hi = fraction(s.gross, b, s.market.shares)?;
-    let fee_lo = fraction(s.liability, a, s.market.shares)?;
-    let fee_hi = fraction(s.liability, b, s.market.shares)?;
-    let net_claim_lo = claim_lo.saturating_sub(fee_hi);
-    let net_claim_hi = claim_hi
-        .checked_sub(fee_lo)
-        .ok_or(invalid("interval fee claim"))?;
-    let retained_net = net
-        .checked_sub(net_claim_hi)
-        .ok_or(invalid("interval net claim"))?;
-    let v_lo = venue
-        .checked_sub(claim_hi.saturating_sub(limits.cash))
-        .ok_or(invalid("interval venue claim"))?;
-    let v_hi = venue
-        .checked_sub(claim_lo.saturating_sub(limits.cash))
-        .ok_or(invalid("interval venue claim"))?;
-    let n_lo = close_for_retained(s, limits, net - net_claim_lo, v_hi)?;
-    let n_hi = close_for_retained(s, limits, retained_net, v_lo)?;
-    let base = s.position.base.unsigned_abs();
-    let mut cost = 0u64;
-    for n in [n_lo, n_hi] {
-        let o = Order {
-            lots: n,
-            buy: s.position.base < 0,
-            reduce_only: true,
-            deposit: 0,
-            limit_ticks: limit_ticks(s, s.position.base < 0)?,
-        };
-        let f = matcher.quote(&o)?;
-        let marked = n as i128 * s.mark.quote_per_lot as i128;
-        let loss = (if o.buy {
-            f.quote_atoms as i128 - marked
-        } else {
-            marked - f.quote_atoms as i128
-        }) + f.fee_atoms as i128;
-        cost = cost.max(u64::try_from(loss.max(0)).map_err(|_| invalid("interval cost overflow"))?);
-    }
-    // A rounded fee can exceed the interpolation of its rounded endpoints by an atom.
-    if n_lo != n_hi {
-        cost = cost
-            .checked_add(1)
-            .ok_or(invalid("interval fee overflow"))?;
-    }
-    if net_claim_lo <= cost {
-        return Ok(false);
-    }
-    let retained_venue = venue.saturating_sub(cost).min(v_lo);
-    let remaining_max = base - n_lo;
-    let remaining_min = base - n_hi;
-    for mark in [
-        s.mark.quote_per_lot,
-        s.live_mark_bounds.0,
-        s.live_mark_bounds.1,
-    ] {
-        let before_shift = mark_shift(s.position.base as i128, mark, s.mark.quote_per_lot)?;
-        let shift = mark_shift(
-            remaining_max as i128 * s.position.base.signum() as i128,
-            mark,
-            s.mark.quote_per_lot,
-        )?
-        .min(mark_shift(
-            remaining_min as i128 * s.position.base.signum() as i128,
-            mark,
-            s.mark.quote_per_lot,
-        )?);
-        let bv = u64::try_from(
-            (venue as i128)
-                .checked_add(before_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("interval negative venue"))?;
-        let bn = u64::try_from(
-            (net as i128)
-                .checked_add(before_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("interval negative net"))?;
-        let av = u64::try_from(
-            (retained_venue as i128)
-                .checked_add(shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("interval negative venue"))?;
-        let an = u64::try_from(
-            (retained_net as i128)
-                .checked_add(shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("interval negative net"))?;
-        if !risk_at(s, limits, mark, remaining_max, bv, bn, av, an)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-#[allow(clippy::too_many_arguments)]
-fn risk_at(
-    s: &State,
-    limits: Limits,
-    mark: u128,
-    base: u64,
-    before_venue: u64,
-    before_net: u64,
-    venue: u64,
-    net: u64,
-) -> Result<bool> {
-    if base == 0 {
-        return Ok(true);
-    }
-    let original = s.position.base.unsigned_abs() as u128;
-    let n = base as u128;
-    let v_ok = before_venue > 0 && n * before_venue as u128 <= original * venue as u128;
-    let p_ok = before_net > 0 && n * before_net as u128 <= original * net as u128;
-    let notional = n
-        .checked_mul(mark)
-        .and_then(|v| v.checked_mul(10_000))
-        .ok_or(invalid("interval exposure overflow"))?;
-    Ok(venue > 0
-        && net > 0
-        && (notional <= venue as u128 * limits.max_venue_leverage_bps as u128 || v_ok)
-        && (notional
-            <= net as u128
-                * s.market.leverage as u128
-                * (10_000 + s.market.rebalance_band_bps as u128)
-            || p_ok)
-        && (venue >= limits.min_venue_equity || (n < original && v_ok && p_ok)))
-}
-
-fn mark_shift(base: i128, live: u128, captured: u128) -> Result<i128> {
-    let live = i128::try_from(live).map_err(|_| invalid("live mark overflow"))?;
-    let captured = i128::try_from(captured).map_err(|_| invalid("captured mark overflow"))?;
-    live.checked_sub(captured)
-        .and_then(|d| base.checked_mul(d))
-        .ok_or(invalid("live equity shift overflow"))
-}
-
+/// Retained-risk checks at the supplied mark. Phoenix's post-order mark is
+/// evaluated by transaction simulation and by the program, not forecast here.
 fn retained_risk(
     s: &State,
     limits: Limits,
@@ -557,66 +364,34 @@ fn retained_risk(
     net_after: u64,
 ) -> Result<()> {
     let base = base_after.unsigned_abs() as u128;
+    let original = s.position.base.unsigned_abs() as u128;
+    if base > original {
+        return Err(invalid("invalid retained V4 backing"));
+    }
     if base == 0 {
         return Ok(());
     }
-    let original = s.position.base.unsigned_abs() as u128;
-    if base > original || venue_after == 0 || net_after == 0 {
-        return Err(invalid("invalid retained V4 backing"));
-    }
-    for mark in [
-        s.mark.quote_per_lot,
-        s.live_mark_bounds.0,
-        s.live_mark_bounds.1,
-    ] {
-        let before_shift = mark_shift(s.position.base as i128, mark, s.mark.quote_per_lot)?;
-        let after_shift = mark_shift(base_after as i128, mark, s.mark.quote_per_lot)?;
-        let before_venue = u64::try_from(
-            ((s.gross - limits.cash) as i128)
-                .checked_add(before_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("negative live pre-exit equity"))?;
-        let before_net = u64::try_from(
-            ((s.gross - s.liability) as i128)
-                .checked_add(before_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("negative live pre-exit net"))?;
-        let live_venue = u64::try_from(
-            (venue_after as i128)
-                .checked_add(after_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("negative live retained equity"))?;
-        let live_net = u64::try_from(
-            (net_after as i128)
-                .checked_add(after_shift)
-                .ok_or(invalid("live equity overflow"))?,
-        )
-        .map_err(|_| invalid("negative live retained net"))?;
-        let venue_non_worsening =
-            before_venue > 0 && base * before_venue as u128 <= original * live_venue as u128;
-        let pool_non_worsening =
-            before_net > 0 && base * before_net as u128 <= original * live_net as u128;
-        let notional = base
-            .checked_mul(mark)
-            .and_then(|v| v.checked_mul(10_000))
-            .ok_or(invalid("retained notional overflow"))?;
-        if live_venue == 0
-            || live_net == 0
-            || (notional > live_venue as u128 * limits.max_venue_leverage_bps as u128
-                && !venue_non_worsening)
-            || (notional
-                > live_net as u128
-                    * s.market.leverage as u128
-                    * (10_000 + s.market.rebalance_band_bps as u128)
-                && !pool_non_worsening)
-            || (live_venue < limits.min_venue_equity
-                && !(base < original && venue_non_worsening && pool_non_worsening))
-        {
-            return Err(invalid("V4 retained risk exceeded"));
-        }
+    let venue_non_worsening = s.gross > limits.cash
+        && base * (s.gross - limits.cash) as u128 <= original * venue_after as u128;
+    let pool_non_worsening = s.gross > s.liability
+        && base * (s.gross - s.liability) as u128 <= original * net_after as u128;
+    let notional = base
+        .checked_mul(s.mark.quote_per_lot)
+        .and_then(|v| v.checked_mul(10_000))
+        .ok_or(invalid("retained notional overflow"))?;
+    if venue_after == 0
+        || net_after == 0
+        || (notional > venue_after as u128 * limits.max_venue_leverage_bps as u128
+            && !venue_non_worsening)
+        || (notional
+            > net_after as u128
+                * s.market.leverage as u128
+                * (10_000 + s.market.rebalance_band_bps as u128)
+            && !pool_non_worsening)
+        || (venue_after < limits.min_venue_equity
+            && !(base < original && venue_non_worsening && pool_non_worsening))
+    {
+        return Err(invalid("V4 retained risk exceeded"));
     }
     Ok(())
 }
@@ -721,24 +496,6 @@ pub fn quote(
         .ok_or(invalid("negative venue equity"))?;
     let output = if mint {
         venue_margin(s, limits, base_after, venue_after)?;
-        for mark in [s.live_mark_bounds.0, s.live_mark_bounds.1] {
-            let shift = mark_shift(base_after as i128, mark, s.mark.quote_per_lot)?;
-            let live_equity = u64::try_from(
-                (venue_after as i128)
-                    .checked_add(shift)
-                    .ok_or(invalid("live equity overflow"))?,
-            )
-            .map_err(|_| invalid("negative post-trade mark equity"))?;
-            if live_equity < limits.min_venue_equity
-                || (base_after.unsigned_abs() as u128)
-                    .checked_mul(mark)
-                    .and_then(|n| n.checked_mul(10_000))
-                    .ok_or(invalid("live exposure overflow"))?
-                    > live_equity as u128 * limits.max_venue_leverage_bps as u128
-            {
-                return Err(invalid("post-trade mark exceeds mint finance bounds"));
-            }
-        }
         let collateral_added = u64::try_from(fill.collateral_after as i128 - funded_collateral(s)?)
             .map_err(|_| invalid("no contributed collateral"))?;
         let added = after

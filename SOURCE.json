@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "3add741ce14f68a1b4f35546b796b05cff052270",
-  "runtime_commit": "3add741ce14f68a1b4f35546b796b05cff052270",
+  "ocelot_source_commit": "c9c62091a2c787aa76372a89dd4a3a3d76d8c548",
+  "runtime_commit": "c9c62091a2c787aa76372a89dd4a3a3d76d8c548",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Compatibility with deployed November 17 Ocelot release: V4 cash-first redemption, contributed-collateral mint cap, finance IOC policy and post-trade risk; revised conservative curves and bounds. Template router allowlist updated. No activation.",
+  "review_scope": "Remove speculative post-order mark/EMA forecasting and recursive redemption prefix. Preserve V4 accounting, conservative curves and captured-state risk checks; explicitly measure execution failures and executable declines. Signed IOC headroom and Titan simulation recovery remain open. No activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,5 +11,5 @@
   "exported_at": "2026-11-17",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "f14135fc3bac75bd1aaeac3e744489b83e7e7816"
+  "previous_runtime_commit": "3add741ce14f68a1b4f35546b796b05cff052270"
 }
