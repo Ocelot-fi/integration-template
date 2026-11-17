@@ -1,5 +1,12 @@
 # Current-state quoting, 17 November 2026
 
+**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
+This adapter now mirrors an un-deployed program fix that closes the redeemed share of
+exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
+and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
+activation. The earlier planner's execution-rejection counts below are historical;
+updated reproduction, coverage and remaining limitations are in the linked record.
+
 This follow-up removes the speculative post-order reference-price forecast from
 the November 17 compatibility patch. It does not change the deployed Ocelot
 program or Titan's template router. V4 redemption and V3 mint remain supported.

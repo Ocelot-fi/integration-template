@@ -37,11 +37,7 @@ async fn upgraded_program_executes_current_quotes() {
         ),
     ] {
         let path = Path::new("tests/fixtures").join(format!("{file}.bin.gz"));
-        let cache = if file == "sol-normal-470602378" {
-            support::Snapshot::read(&path) // unmodified post-upgrade capture
-        } else {
-            support::Snapshot::current(&path) // historical state, current executable
-        };
+        let cache = support::Snapshot::candidate(&path);
         let key = address.parse().unwrap();
         let mut v = OcelotVenue::from_account(&key, cache.0[&key].as_ref().unwrap()).unwrap();
         v.update_state(&cache).await.unwrap();
@@ -147,7 +143,7 @@ async fn regular_finance_price_policy_is_used_by_both_instructions() {
     ] {
         let key = address.parse().unwrap();
         let mut cache =
-            support::Snapshot::read(Path::new("tests/fixtures/sol-normal-470602378.bin.gz"));
+            support::Snapshot::candidate(Path::new("tests/fixtures/sol-normal-470602378.bin.gz"));
         let finance = ocelot::instruction::pda(b"finance_v1", key);
         cache.0.get_mut(&finance).unwrap().as_mut().unwrap().data[59..61]
             .copy_from_slice(&25u16.to_le_bytes());

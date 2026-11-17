@@ -1,5 +1,36 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## November 17 proportional redemption correction
+
+Source `6152c3027ee03f81cb664fe2da750faf2dbec186` mirrors the new proportional V4 program planner. This is an
+**un-deployed program candidate**; coordinate program, SDK and Titan rollout before
+activation. The candidate executable is separately pinned as `506ef261…`; the original
+deployed executable and all captured account files are retained.
+
+The one-observation SOL3L reproduction improves from 46/61 rejected exits to 0/61.
+All 732 candidate oracle-variation redemptions execute without overquotes. Whole-supply
+coverage executes 1,230/1,230; captured and constructed worst-mid sweeps execute 1,470
+and 52,262 comparisons with zero failures/overquotes/holes. Source verification includes
+77 reference host tests, 44 default host tests, one creation-parser test, three explicit
+routed/rollback tests, 40 shared Titan shape/construction checks and the two sweeps.
+
+Every accepted output, marginal price and range in the 64,709-record regression remains
+unchanged. Curves and worst-mid source are unchanged. Local release quote p99 batch means
+are 142–301 ns; refresh p50 is 1.28–1.97 ms. See [identity, commands, exact coverage and
+remaining constraints](PROPORTIONAL_REDEMPTIONS.md). The separate signed IOC price-limit
+headroom issue and two constructed mint minimum-equity endpoint rejections remain.
+
+Standalone export verification: 77 reference host tests and 45 default/creation tests
+pass. Adapter/library Clippy with reference simulation and `-D warnings` passes;
+formatting and whitespace checks pass. All 105 byte-identical source/export hashes match.
+The deliberately broader `--all-targets` Clippy invocation hits two inherited
+`result_large_err` warnings in unchanged `tests/common/mod.rs` through the upstream
+example target; no shared test or error-type change was made to suppress them.
+Explicit routed/rollback and crossing-sweep results above were run in the source checkout
+against the identical exported runtime/test files and pinned candidate binary.
+
+## Earlier handoff evidence
+
 ## November 17 current-state quoting follow-up
 
 Source `c9c62091a2c787aa76372a89dd4a3a3d76d8c548` removes the speculative post-order mark/EMA model and recursive

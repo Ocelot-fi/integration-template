@@ -128,7 +128,7 @@ impl RpcSender for Sender {
     }
 }
 async fn fixture() -> (support::Snapshot, OcelotVenue) {
-    let base = support::Snapshot::current(&Path::new("tests/fixtures").join(FILE));
+    let base = support::Snapshot::candidate(&Path::new("tests/fixtures").join(FILE));
     let pool = POOL.parse().unwrap();
     let mut v = OcelotVenue::from_account(&pool, base.0[&pool].as_ref().unwrap()).unwrap();
     v.update_state(&base).await.unwrap();

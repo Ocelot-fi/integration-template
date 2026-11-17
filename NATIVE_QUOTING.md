@@ -1,5 +1,12 @@
 # Native quoting implementation, updated 17 November 2026
 
+**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
+This adapter now mirrors an un-deployed program fix that closes the redeemed share of
+exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
+and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
+activation. The earlier planner's execution-rejection counts below are historical;
+updated reproduction, coverage and remaining limitations are in the linked record.
+
 **Current candidate:** [current-state quoting](CURRENT_STATE_QUOTING.md) removes
 the speculative post-order mark/EMA forecast introduced by the
 [November 17 compatibility update](PROGRAM_UPGRADE_2026_11_17.md). V4 accounting,

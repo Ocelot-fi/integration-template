@@ -88,7 +88,7 @@ impl AccountsCache for Recording<'_> {
 async fn every_requested_dependency_remains_watched_even_when_absent() {
     for (file, pool) in FIXTURES {
         let pool = pool.parse().unwrap();
-        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let mut v = OcelotVenue::from_account(&pool, cache.0[&pool].as_ref().unwrap()).unwrap();
         for _ in 0..2 {
             // Cold and warm discovery.
@@ -113,7 +113,7 @@ async fn market_throttle_creation_deletion_and_recreation_refresh_quotes() {
     for i in [1, 3] {
         let (file, pool) = FIXTURES[i];
         let pool = pool.parse().unwrap();
-        let mut cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let mut cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let mut v = load(&cache, pool).await;
         let s = v.state().unwrap();
         let bucket = Pubkey::find_program_address(
@@ -172,7 +172,7 @@ async fn market_throttle_creation_deletion_and_recreation_refresh_quotes() {
 async fn executed_full_exit_allows_cold_and_warm_bootstrap() {
     for (file, pool) in FIXTURES {
         let pool = pool.parse().unwrap();
-        let mut cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let mut cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         // Remove fees/liabilities before the actual exit so it leaves no orphaned
         // fee equity. All supply, position and balance changes below come from SBF.
         let data = &mut cache.0.get_mut(&pool).unwrap().as_mut().unwrap().data;
@@ -252,7 +252,7 @@ async fn executed_full_exit_allows_cold_and_warm_bootstrap() {
 async fn advancing_cache_uses_only_final_executed_state() {
     for (file, pool) in FIXTURES {
         let pool = pool.parse().unwrap();
-        let early = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let early = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let mut v = load(&early, pool).await;
         v.load_reference_oracle(&early).await.unwrap();
         let r = request(&v, true, v.state().unwrap().gross / 10);
@@ -324,7 +324,7 @@ async fn advancing_cache_uses_only_final_executed_state() {
 async fn final_read_failure_or_changed_dependencies_invalidates_previous_quote() {
     let (file, pool) = FIXTURES[2];
     let pool = pool.parse().unwrap();
-    let early = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+    let early = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
     let v = load(&early, pool).await;
     for missing in [
         v.state().unwrap().config.trader,
@@ -397,7 +397,7 @@ impl AccountsCache for BatchOnly<'_> {
 async fn cold_discovery_batches_dependencies_with_clock_and_withdrawal_queue() {
     for (file, pool) in FIXTURES {
         let pool = pool.parse().unwrap();
-        let early = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let early = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let original = load(&early, pool).await;
         let s = original.state().unwrap();
         let mut late = support::Snapshot(early.0.clone());

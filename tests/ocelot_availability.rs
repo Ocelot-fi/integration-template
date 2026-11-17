@@ -39,11 +39,7 @@ async fn redemption_coverage_and_execution_failures_are_measured() {
         ("sol-normal-470602378", SHORT),
     ] {
         let path = Path::new("tests/fixtures").join(format!("{file}.bin.gz"));
-        let cache = if file == "sol-normal-470602378" {
-            support::Snapshot::read(&path)
-        } else {
-            support::Snapshot::current(&path)
-        };
+        let cache = support::Snapshot::candidate(&path);
         let v = load(&cache, address.parse().unwrap()).await;
         let s = v.state().unwrap();
         let (lo, hi) = v.bounds(1, 0).unwrap();
@@ -123,27 +119,19 @@ async fn redemption_coverage_and_execution_failures_are_measured() {
             "sample disappeared into a joint quote/execution rejection"
         );
     }
-    // Pin every observed rejected input, rather than permitting arbitrary
-    // failures or shrinking the routing domain to hide them.
-    assert_eq!(
-        rejected,
-        vec![
-            ("sol3l-467430913", 3_155_519_257),
-            ("sol2s-467431351", 2_198_157),
-            ("sol2s-467431351", 2_547_864),
-            ("sol2s-467431351", 2_897_570),
-            ("sol2s-467431351", 6_094_890),
-            ("sol2s-467431351", 6_444_597),
-        ]
+    assert!(
+        rejected.is_empty(),
+        "candidate redemption rejections: {rejected:?}"
     );
 }
 
 /// The host no longer forecasts the post-order reference price. Demonstrate
-/// both the changing EMA and an actual post-order rejection, without accepting
-/// wrong payouts or pretending every quote necessarily executes.
+/// the changing EMA and proportional exits surviving the old one-tick failure.
+/// This is same-snapshot execution coverage, not a promise under arbitrary delay.
 #[tokio::test]
 async fn post_order_price_changes_are_left_to_simulation_and_program_guards() {
-    let original = support::Snapshot::read(Path::new("tests/fixtures/sol-normal-470602378.bin.gz"));
+    let original =
+        support::Snapshot::candidate(Path::new("tests/fixtures/sol-normal-470602378.bin.gz"));
     let key = LONG.parse().unwrap();
     let base = load(&original, key).await;
     let asset = base.state().unwrap().config.asset;
@@ -199,7 +187,9 @@ async fn post_order_price_changes_are_left_to_simulation_and_program_guards() {
                 -1
             );
         } else {
-            support::assert_execution_risk_rejection(&e.unwrap_err());
+            let (e, post) = e.unwrap();
+            assert!(q.expected_output <= e.output);
+            assert_eq!(u64_at(&post[&ocelot::PERP_MAP].data, o + 24).unwrap(), 7236);
         }
     }
 }

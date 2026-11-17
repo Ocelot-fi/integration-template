@@ -30,7 +30,7 @@ const LONG: &str = "AuvLduWd2g2kmD4kLTGH4c3jf7XqfA9qBUDb4Lmps7kM";
 const SHORT: &str = "CNEcZ2Cf6bqQTb8r9BSyZQb8o47Qa6Fd72Z1dj5BDGqp";
 async fn replay(folder: &str, market: &str) {
     let market: Pubkey = market.parse().unwrap();
-    let cache = support::Snapshot::current(Path::new(&folder));
+    let cache = support::Snapshot::candidate(Path::new(&folder));
     let mut venue =
         OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())
             .unwrap();
@@ -67,17 +67,9 @@ async fn replay(folder: &str, market: &str) {
                 amount,
                 swap_type: SwapType::ExactIn,
             };
-            let native = match venue.quote(request.clone()) {
-                Ok(q) => q,
-                Err(e) => {
-                    assert!(amount < lo || amount > hi, "advertised route rejected: {e}");
-                    assert!(
-                        !mint && e.to_string().contains("V4 retained risk exceeded"),
-                        "unexpected rejection: {e}"
-                    );
-                    continue;
-                }
-            };
+            let native = venue
+                .quote(request.clone())
+                .expect("quote acceptance must match routed execution");
             accepted += 1;
             let direct = venue.reference_quote(&request).expect("direct replay");
             assert!(native.expected_output <= direct.output);
@@ -184,7 +176,7 @@ async fn pinned_execution_outputs_and_non_monotone_lot_boundaries() {
             "sol3l-465928618.bin.gz",
             LONG,
             9_263_379,
-            10_730_191,
+            10_726_051,
             601_135,
             566_096,
         ),
@@ -192,12 +184,12 @@ async fn pinned_execution_outputs_and_non_monotone_lot_boundaries() {
             "sol2s-465928707.bin.gz",
             SHORT,
             9_747_708,
-            10_196_606,
+            10_195_992,
             901_901,
             845_852,
         ),
     ] {
-        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let market: Pubkey = key.parse().unwrap();
         let mut venue =
             OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())
@@ -228,7 +220,7 @@ async fn pinned_execution_outputs_and_non_monotone_lot_boundaries() {
                 let b = venue.reference_quote(&request(boundary)).unwrap();
                 assert!(a.output > b.output, "mint retains whole-lot steps");
             }
-            // V4 no longer uses V3's proportional redemption lot boundaries.
+            // V4 rounds proportional closes up; its edges differ from V3's floor.
             // V4 planner transitions are covered in ocelot_curve and ocelot_upgrade.
             assert!(venue.quote(request(10_000_000)).unwrap().expected_output <= expected);
         }

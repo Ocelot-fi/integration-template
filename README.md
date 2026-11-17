@@ -1,5 +1,12 @@
 # Ocelot native issuer integration for Titan
 
+**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
+This adapter now mirrors an un-deployed program fix that closes the redeemed share of
+exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
+and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
+activation. The earlier planner's execution-rejection counts below are historical;
+updated reproduction, coverage and remaining limitations are in the linked record.
+
 **17 November follow-up: removed speculative post-order mark prediction.**
 V4 cash-first redemption, the mint contribution cap, conservative output curves,
 worst-mid pricing and captured-state risk checks remain. The adapter no longer

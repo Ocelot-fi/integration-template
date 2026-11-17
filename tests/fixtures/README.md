@@ -2,9 +2,9 @@
 
 These gzip archives contain captured public Solana accounts, including deployed
 programdata, not wallets or private signing material. They are used only in a
-local bank with synthetic user balances. Historical archives stay unchanged. Current-release replay uses
-`Snapshot::current` to replace only their Ocelot executable payload in memory;
-this is historical state with new code. Negative tests fork state explicitly.
+local bank with synthetic user balances. Historical archives stay unchanged. Candidate replay uses
+`Snapshot::candidate` to replace only their Ocelot executable payload in memory;
+this is historical state with un-deployed candidate code. Negative tests fork state explicitly.
 
 See [the verification record](../../HANDOFF.md)
 for capture slots, executable/fixture hashes, outputs, limitations, and the
@@ -25,6 +25,11 @@ observation counts are not a time-weighted availability estimate. See
 
 The November 17 compatibility update adds `ocelot-mainnet-20261117.so.gz`
 (hash-pinned deployed Ocelot release) and the unmodified coherent capture
-`sol-normal-470602378.bin.gz`, with both SOL token markets. The upgrade test
-replays that fresh capture directly. See [release evidence](../../PROGRAM_UPGRADE_2026_11_17.md)
+`sol-normal-470602378.bin.gz`, with both SOL token markets. The original capture remains the deployed baseline; current candidate tests replace only
+Ocelot code explicitly. See [release evidence](../../PROGRAM_UPGRADE_2026_11_17.md)
 for exact hashes, current-code replay semantics, coverage and limitations.
+
+The proportional correction adds `ocelot-proportional-candidate-20261117.so.gz`,
+a separately hash-pinned, **un-deployed** program build. `ocelot_proportional` replays
+both original and candidate programs against the same account snapshot to reproduce
+and fix the one-tick redemption failure. See [candidate identity and evidence](../../PROPORTIONAL_REDEMPTIONS.md).

@@ -118,7 +118,7 @@ async fn lock(
 }
 
 async fn captured(file: &str, market: usize) -> (OcelotVenue, support::Snapshot) {
-    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
     let v = decoded(&cache, FIXTURES[market].1.parse().unwrap()).await;
     (v, cache)
 }
@@ -126,7 +126,7 @@ async fn captured(file: &str, market: usize) -> (OcelotVenue, support::Snapshot)
 #[tokio::test]
 async fn normal_output_price_bounds_and_instructions_are_unchanged() {
     for (file, market) in FIXTURES {
-        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let v = decoded(&cache, market.parse().unwrap()).await;
         assert!(!v.uses_midpoint_approximation());
         let mut strict = v.clone();
@@ -231,7 +231,7 @@ async fn default_worst_mid_preserves_accounts_and_returns_curve_without_haircut(
 async fn refresh_transitions_restore_native_and_failed_refresh_clears_state() {
     for (file, market) in FIXTURES {
         let key = market.parse().unwrap();
-        let normal = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let normal = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let (mut changed, maker) = lock(&normal, key, true).await;
         let mut v = decoded(&normal, key).await;
         let r = request(&v, true, 5_000_000);
@@ -400,7 +400,7 @@ async fn captured_outputs_and_former_common_mid_overquotes_are_bounded() {
     ] {
         let (file, market) = FIXTURES[index];
         let key = market.parse().unwrap();
-        let original = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let original = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let (mut changed, maker) = lock(&original, key, true).await;
         let v = decoded(&changed, key).await;
         let k = spline_key(v.state().unwrap().config.book);
@@ -594,6 +594,10 @@ async fn sweep(cache: &support::Snapshot, key: Pubkey, label: &str, stride: u64)
         );
         assert_eq!(holes, 0);
         assert_eq!(over, 0, "worst-mid output regression");
+        assert_eq!(
+            failures, 0,
+            "execution rejection regression: {label} mint={mint}"
+        );
     }
 }
 
@@ -629,7 +633,7 @@ async fn production_execution_sweep() {
     } else {
         for (file, market) in FIXTURES {
             let key = market.parse().unwrap();
-            let original = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+            let original = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
             for raise in [false, true] {
                 let (locked, maker) = lock(&original, key, raise).await;
                 let v = decoded(&locked, key).await;

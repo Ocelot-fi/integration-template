@@ -37,7 +37,7 @@ const FIXTURES: [(&str, &str); 4] = [
 ];
 async fn fixture(i: usize) -> (OcelotVenue, support::Snapshot) {
     let (name, market) = FIXTURES[i];
-    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(name));
+    let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(name));
     let pool = market.parse().unwrap();
     let mut v = OcelotVenue::from_account(&pool, cache.0[&pool].as_ref().unwrap()).unwrap();
     v.update_state(&cache).await.unwrap();
@@ -812,7 +812,8 @@ async fn curve_breakpoints_and_sizes_measure_output_and_rejections() {
         "curve execution: {compared} accepted comparisons, {within_one_bp} within 1 bp; worst {:.6} bp ({})",
         worst.0, worst.1
     );
-    // The captured SOL2S execution changes its reference mark and fails the
-    // retained-risk check. Keep the exact rejected case visible and bounded.
-    assert_eq!(rejected, vec![(3, false, 1_481_343)]);
+    assert!(
+        rejected.is_empty(),
+        "candidate quote execution rejections: {rejected:?}"
+    );
 }

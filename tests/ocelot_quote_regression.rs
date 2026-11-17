@@ -1,6 +1,8 @@
 #![allow(clippy::result_large_err)]
 //! Frozen November 17 current-state quote/instruction baseline. Numerical changes
-//! are independently exercised against the pinned deployed executable.
+//! are independently exercised against the pinned candidate executable.
+//! Previous V4 instruction hash: 43c34f24af5754ed44e0eb7dd177648199e628da80ecbed44a7e4ce00a2fa93b.
+//! Redemption lot hints and three tiny-input error strings change; accepted quotes stay pinned.
 //! Initial upgrade/mark-forecast hash: a7bec29e5ba5364724678e0bf0dbb56b4115f170ee96adba7f1d33e50d419cb5.
 //! Pre-upgrade hash: 67eee7455bf965a2bfe591154a5ee41a0b531fda53c310d65ce1ee8fa0bafafe.
 #[allow(dead_code)]
@@ -32,7 +34,7 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
             "CNEcZ2Cf6bqQTb8r9BSyZQb8o47Qa6Fd72Z1dj5BDGqp",
         ),
     ] {
-        let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+        let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
         let key: Pubkey = market.parse().unwrap();
         let mut v = OcelotVenue::from_account(&key, cache.0[&key].as_ref().unwrap()).unwrap();
         v.update_state(&cache).await.unwrap();
@@ -89,8 +91,22 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
     }
     println!("upgrade baseline: {} records", out.lines().count());
     use sha2::{Digest, Sha256};
+    // Independently compared with the prior implementation: all accepted
+    // outputs, marginal prices and bounds are identical. Three one-atom inputs
+    // still decline but now report that closing costs consume the claim.
+    let accepted = out
+        .lines()
+        .filter(|line| {
+            line.contains(" bounds=") || (line.contains(" ok ") && !line.starts_with("  ix "))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(accepted.as_bytes())),
+        "50b34b5ffae92de2f8772a6358c6d03cfe6e376fa47c0cb23c3aed3fd2137288"
+    );
     assert_eq!(
         format!("{:x}", Sha256::digest(out.as_bytes())),
-        "43c34f24af5754ed44e0eb7dd177648199e628da80ecbed44a7e4ce00a2fa93b"
+        "c1b75fc343bc525b6c7fdee85a9ee03478c0a4dd87387c05061a50731a512f95"
     );
 }

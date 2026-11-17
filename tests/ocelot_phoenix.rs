@@ -40,7 +40,7 @@ async fn load(cache: &support::Snapshot, key: Pubkey) -> OcelotVenue {
 }
 async fn fixture(i: usize) -> (OcelotVenue, support::Snapshot) {
     let (file, key) = FIXTURES[i];
-    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
     (load(&cache, key.parse().unwrap()).await, cache)
 }
 fn request(v: &OcelotVenue, mint: bool, amount: u64) -> QuoteRequest {
@@ -599,14 +599,6 @@ async fn native_fee_overrides_and_budget_mutations_against_execution() {
                 let r = request(&v, mint, amount);
                 let q = match v.quote(r.clone()) {
                     Ok(q) => q,
-                    Err(e) if e.to_string().contains("V4 retained risk exceeded") => {
-                        let (lo, hi) = v.bounds(u8::from(!mint), u8::from(mint)).unwrap();
-                        assert!(
-                            amount < lo || amount > hi,
-                            "advertised range must stay executable"
-                        );
-                        continue;
-                    }
                     Err(e) => {
                         panic!("fee={fee} multiplier={multiplier} mint={mint} amount={amount}: {e}")
                     }

@@ -196,7 +196,7 @@ async fn fixture(short: bool) -> (OcelotVenue, support::Snapshot, GeometryBridge
             "AuvLduWd2g2kmD4kLTGH4c3jf7XqfA9qBUDb4Lmps7kM",
         )
     };
-    let cache = support::Snapshot::current(&Path::new("tests/fixtures").join(file));
+    let cache = support::Snapshot::candidate(&Path::new("tests/fixtures").join(file));
     let key = key.parse().unwrap();
     let mut v =
         OcelotVenue::from_account(&key, &cache.get_account(&key).await.unwrap().unwrap()).unwrap();
@@ -250,7 +250,7 @@ async fn pinned_depth_uses_account_prices_without_fixed_price_matcher() {
             quote::quote(s, limits, &bridge, 10_000_000, false)
                 .unwrap()
                 .amount,
-            if short { 10_196_606 } else { 10_730_191 }
+            if short { 10_195_992 } else { 10_726_051 }
         );
     }
 }
@@ -260,7 +260,7 @@ async fn pinned_depth_uses_account_prices_without_fixed_price_matcher() {
 async fn spline_geometry_against_captured_execution() {
     let (mut exact, mut under, mut rejected) = (0, 0, 0);
     let mut max_under_bps = 0.0f64;
-    let mut conservative = 0;
+    let conservative = 0;
     for short in [false, true] {
         let (mut v, cache, bridge) = fixture(short).await;
         v.load_reference_oracle(&cache).await.unwrap();
@@ -319,11 +319,6 @@ async fn spline_geometry_against_captured_execution() {
                         );
                     }
                     (Err(_), Err(_)) => rejected += 1,
-                    (Err(e), Ok(_)) if e.to_string().contains("V4 retained risk exceeded") => {
-                        conservative += 1;
-                        let (lo, hi) = v.bounds(1, 0).unwrap();
-                        assert!(!mint && (amount < lo || amount > hi));
-                    }
                     (q, actual) => panic!(
                         "acceptance mismatch short={short} mint={mint} input={amount}: {q:?} vs {actual:?}"
                     ),
@@ -404,7 +399,7 @@ async fn spline_geometry_against_november_9_captures() {
 
 #[cfg(feature = "reference-simulation")]
 async fn compare_snapshot(folder: &str, market: Pubkey) {
-    let cache = support::Snapshot::current(Path::new(folder));
+    let cache = support::Snapshot::candidate(Path::new(folder));
     let mut v =
         OcelotVenue::from_account(&market, &cache.get_account(&market).await.unwrap().unwrap())
             .unwrap();

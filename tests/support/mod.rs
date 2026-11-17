@@ -23,20 +23,20 @@ use titan_integration_template::{
 pub const ROUTER: Pubkey = Pubkey::from_str_const("T1TANpTeScyeqVzzgNViGDNrkQ6qHz9KrSBS4aNXvGT");
 pub struct Snapshot(pub HashMap<Pubkey, Option<Account>>);
 impl Snapshot {
-    /// Historical market accounts with ONLY Ocelot's executable replaced by the
-    /// hash-pinned November 17 release. Not a fresh live capture.
-    pub fn current(path: &Path) -> Self {
+    /// Captured accounts with ONLY Ocelot's executable replaced by the proportional
+    /// redemption CANDIDATE. This is not a deployed program or a new live capture.
+    pub fn candidate(path: &Path) -> Self {
         use sha2::Digest;
         let mut snapshot = Self::read(path);
         let mut elf = Vec::new();
         flate2::read::GzDecoder::new(
-            &include_bytes!("../fixtures/ocelot-mainnet-20261117.so.gz")[..],
+            &include_bytes!("../fixtures/ocelot-proportional-candidate-20261117.so.gz")[..],
         )
         .read_to_end(&mut elf)
         .unwrap();
         assert_eq!(
             format!("{:x}", sha2::Sha256::digest(&elf)),
-            "6acccee270bf0892e08e4366b53edf22814b595256c81f819bb9f1f0c4e505d8"
+            "506ef261c9556ea0223757770c733d662d48aa7de71f6d880e8d13a30f64f7b4"
         );
         let program = snapshot.0[&titan_integration_template::ocelot::PROGRAM_ID]
             .as_ref()
@@ -257,7 +257,7 @@ pub fn assert_execution_risk_rejection(error: &impl std::fmt::Display) {
     let message = error.to_string();
     assert!(message.contains("FinanceExecutionBound"), "{message}");
     assert!(
-        message.contains("AnchorError thrown in programs/leveraged_vault/src/withdrawal.rs:92.")
+        message.contains("AnchorError thrown in programs/leveraged_vault/src/withdrawal.rs:98.")
             || message.contains(
                 "AnchorError thrown in programs/leveraged_vault/src/finance_view.rs:243."
             ),

@@ -278,7 +278,7 @@ pub(crate) fn limit_ticks(s: &State, buy: bool) -> Result<u64> {
     })
 }
 
-/// V4 chooses the minimum whole-lot close that preserves the retained pool.
+/// Candidate V4 closes at least the redeemed share of exposure, rounded up.
 /// Mirrors withdrawal::plan, including cash-first payment and integer claims.
 pub fn redemption_lots(s: &State, limits: Limits, amount: u64) -> Result<u64> {
     let supply = s.market.shares;
@@ -297,12 +297,13 @@ pub fn redemption_lots(s: &State, limits: Limits, amount: u64) -> Result<u64> {
     let retained_venue = venue
         .checked_sub(claim.saturating_sub(limits.cash))
         .ok_or(invalid("invalid retained venue equity"))?;
-    close_for_retained(s, limits, retained_net, retained_venue)
+    close_for_retained(s, limits, amount, retained_net, retained_venue)
 }
 
 fn close_for_retained(
     s: &State,
     limits: Limits,
+    shares: u64,
     retained_net: u64,
     retained_venue: u64,
 ) -> Result<u64> {
@@ -327,7 +328,9 @@ fn close_for_retained(
     let venue_cap =
         (retained_venue as u128 * limits.max_venue_leverage_bps as u128 / 10_000 / mark)
             .max(venue_pro_rata);
-    let mut keep = base.min(pool_cap).min(venue_cap);
+    let share_keep = base * (s.market.shares - shares) as u128 / s.market.shares as u128;
+    let net_keep = base * retained_net as u128 / net as u128;
+    let mut keep = share_keep.min(net_keep).min(pool_cap).min(venue_cap);
     let collateral = funded_collateral(s)?;
     let unrealized = venue as i128 - collateral;
     if unrealized > 0 {
