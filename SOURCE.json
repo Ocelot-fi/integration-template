@@ -1,15 +1,17 @@
 {
-  "ocelot_source_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
-  "runtime_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
+  "ocelot_source_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
+  "runtime_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Book-based IOC limits: 25 bp beyond the last required fill, capped 10 bp inside program policy. Existing output smoothing and worst-mid pricing remain. Exact execution and availability evidence in IOC_LIMITS.md. Program upgrade and activation remain separate.",
+  "review_scope": "Verified actual deployed Ocelot ELF 3bb3a7bb at slot 470782007. Decode governance mint ceiling while preserving 40 bp operating cap, 25 bp book cushion, output curves and instruction ABI. See DEPLOYED_PROGRAM_2026_11_18.md. No program change or activation.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
     "purpose": "Titan venue integration; upstream common quote and route tests retained"
   },
-  "exported_at": "2026-11-17",
+  "exported_at": "2026-11-18",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "6152c3027ee03f81cb664fe2da750faf2dbec186"
+  "previous_runtime_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
+  "deployed_program_elf_sha256": "3bb3a7bb74aee8fb84e831f124ad798df97d39305f9ca60106886ad3bee1a9e6",
+  "main_source_baseline": "705391e0289717c670862347ad886b10bd1bc6fb"
 }

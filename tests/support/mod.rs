@@ -47,6 +47,30 @@ impl Snapshot {
         data.extend_from_slice(&elf);
         snapshot
     }
+    /// Historical accounts with ONLY the Ocelot payload replaced by the ELF
+    /// verified on mainnet at deployment slot 470782007 (18 November 2026).
+    pub fn deployed(path: &Path) -> Self {
+        use sha2::Digest;
+        let mut snapshot = Self::read(path);
+        let mut elf = Vec::new();
+        flate2::read::GzDecoder::new(
+            &include_bytes!("../fixtures/ocelot-mainnet-20261118.so.gz")[..],
+        )
+        .read_to_end(&mut elf)
+        .unwrap();
+        assert_eq!(
+            format!("{:x}", sha2::Sha256::digest(&elf)),
+            "3bb3a7bb74aee8fb84e831f124ad798df97d39305f9ca60106886ad3bee1a9e6"
+        );
+        let program = snapshot.0[&titan_integration_template::ocelot::PROGRAM_ID]
+            .as_ref()
+            .unwrap();
+        let key = Pubkey::new_from_array(program.data[4..36].try_into().unwrap());
+        let data = &mut snapshot.0.get_mut(&key).unwrap().as_mut().unwrap().data;
+        data.truncate(45);
+        data.extend_from_slice(&elf);
+        snapshot
+    }
     pub fn read(path: &Path) -> Self {
         let mut entries = HashMap::new();
         if path.is_file() {

@@ -68,6 +68,8 @@ pub struct Market {
     pub remainder: u64,
     pub deposit_cap: u64,
     pub equity_cap: u64,
+    /// Market.max_move_bps: zero resolves to the legacy 300 bp mint ceiling.
+    pub mint_execution_limit_bps: u16,
 }
 impl Market {
     pub const DISCRIMINATOR: [u8; 8] = [219, 190, 213, 55, 0, 227, 198, 154];
@@ -112,6 +114,7 @@ impl Market {
             remainder: u64_at(d, 281)?,
             deposit_cap: u64_at(d, 273)?,
             equity_cap: u64_at(d, 389)?,
+            mint_execution_limit_bps: u16_at(d, 397)?,
         };
         if m.usdc != super::USDC
             || m.mint_fee_bps > 100

@@ -33,3 +33,9 @@ The proportional correction adds `ocelot-proportional-candidate-20261117.so.gz`,
 a separately hash-pinned, **un-deployed** program build. `ocelot_proportional` replays
 both original and candidate programs against the same account snapshot to reproduce
 and fix the one-tick redemption failure. See [candidate identity and evidence](../../PROPORTIONAL_REDEMPTIONS.md).
+
+The November 18 verification adds `ocelot-mainnet-20261118.so.gz` (actual deployed
+ELF `3bb3a7bb…`) and the original coherent `sol-normal-470782801.bin.gz` capture.
+`Snapshot::deployed` replaces only Ocelot code for explicit historical-state
+replay. The fresh capture is replayed unchanged, including ProgramData padding.
+See [deployed identity, source commits and validation](../../DEPLOYED_PROGRAM_2026_11_18.md).

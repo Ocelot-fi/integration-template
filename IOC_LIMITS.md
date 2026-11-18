@@ -1,5 +1,14 @@
 # Book-based IOC limits, 17 November 2026
 
+**18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
+Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
+price policy and a governance mint ceiling. The adapter reads that ceiling while
+preserving its 40 bp operating cap, 25 bp book cushion and existing output curves.
+Captured-state execution and shifted-oracle regressions pass. Titan activation
+remains pending; this verification does not deploy or activate anything.
+
+The following records the earlier implementation and validation checkpoints.
+
 Adapter follow-up to the proportional-redemption candidate for review in
 [Titan PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
 Not activated. No program, SDK, instruction ABI or output

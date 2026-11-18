@@ -1,15 +1,13 @@
 # Ocelot native issuer integration for Titan
 
-**Latest adapter follow-up: [book-based IOC limits](IOC_LIMITS.md).** A 25 bp cushion around
-required fill depth is capped 10 bp inside the program policy. No extra output
-discount. Submitted for engineering review; routing activation remains pending.
+**18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
+Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
+price policy and a governance mint ceiling. The adapter reads that ceiling while
+preserving its 40 bp operating cap, 25 bp book cushion and existing output curves.
+Captured-state execution and shifted-oracle regressions pass. Titan activation
+remains pending; this verification does not deploy or activate anything.
 
-**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
-This adapter now mirrors an un-deployed program fix that closes the redeemed share of
-exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
-and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
-activation. The earlier planner's execution-rejection counts below are historical;
-updated reproduction, coverage and remaining limitations are in the linked record.
+The following records the earlier implementation and validation checkpoints.
 
 **17 November follow-up: removed speculative post-order mark prediction.**
 V4 cash-first redemption, the mint contribution cap, conservative output curves,

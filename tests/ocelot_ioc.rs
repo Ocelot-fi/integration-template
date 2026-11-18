@@ -78,10 +78,14 @@ async fn book_cushion_is_capped_and_shared_by_quotes_and_instructions() {
     for mark in [1, 99, 7237, 10_000, u64::MAX / 2] {
         s.mark.ticks = mark;
         for policy in [1u16, 5, 10, 11, 50, 100, 200] {
-            s.price_bps = policy;
+            s.market.mint_execution_limit_bps = policy;
             for mint in [true, false] {
                 let order = quote::order(&s, 10_000_000, mint).unwrap();
-                let bps = policy.saturating_sub(10).min(100) as u128;
+                let bps = if mint {
+                    policy.saturating_sub(10).min(40)
+                } else {
+                    40
+                } as u128;
                 let expected = if order.buy {
                     mark as u128 * (10_000 + bps) / 10_000
                 } else {

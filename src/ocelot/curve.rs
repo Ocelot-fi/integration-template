@@ -342,7 +342,7 @@ impl Curve {
         } else {
             s.position.base < 0
         };
-        let limit = limit_ticks(s, buy)?;
+        let limit = limit_ticks(s, buy, mint)?;
         let mark =
             i128::try_from(s.mark.quote_per_lot).map_err(|_| invalid("curve mark overflow"))?;
         let levy = if fee_micro == 0 { 0 } else { MICRO };

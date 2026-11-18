@@ -1,11 +1,13 @@
 # Current-state quoting, 17 November 2026
 
-**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
-This adapter now mirrors an un-deployed program fix that closes the redeemed share of
-exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
-and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
-activation. The earlier planner's execution-rejection counts below are historical;
-updated reproduction, coverage and remaining limitations are in the linked record.
+**18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
+Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
+price policy and a governance mint ceiling. The adapter reads that ceiling while
+preserving its 40 bp operating cap, 25 bp book cushion and existing output curves.
+Captured-state execution and shifted-oracle regressions pass. Titan activation
+remains pending; this verification does not deploy or activate anything.
+
+The following records the earlier implementation and validation checkpoints.
 
 This follow-up removes the speculative post-order reference-price forecast from
 the November 17 compatibility patch. It does not change the deployed Ocelot

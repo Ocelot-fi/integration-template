@@ -1,5 +1,14 @@
 # Proportional redemption candidate, 17 November 2026
 
+**18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
+Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
+price policy and a governance mint ceiling. The adapter reads that ceiling while
+preserving its 40 bp operating cap, 25 bp book cushion and existing output curves.
+Captured-state execution and shifted-oracle regressions pass. Titan activation
+remains pending; this verification does not deploy or activate anything.
+
+The following records the earlier implementation and validation checkpoints.
+
 **This adapter targets an un-deployed Ocelot program correction. Coordinate the program,
 SDK and Titan rollout before activation.** It is not the executable currently on mainnet.
 V4's instruction/account ABI is unchanged; the program reconstructs the order quantity.

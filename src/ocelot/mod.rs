@@ -104,7 +104,6 @@ pub struct State {
     pub clock: Clock,
     pub actual_supply: u64,
     pub revision: u64,
-    pub price_bps: u16,
     pub gross: u64,
     pub liability: u64,
     pub exchange: instruction::Exchange,
@@ -200,8 +199,10 @@ fn decode_state(
         return Err(invalid("inactive/mismatched finance"));
     }
     let revision = u64_at(f, 43)?;
-    let price_bps = codec::u16_at(f, 59)?;
-    if price_bps == 0 || price_bps >= 1000 {
+    // FinanceState still validates the keeper policy on every user operation.
+    // Its price band no longer supplies the user order's IOC ceiling.
+    let keeper_price_bps = codec::u16_at(f, 59)?;
+    if keeper_price_bps == 0 || keeper_price_bps >= 1000 {
         return Err(invalid("unsupported regular execution price policy"));
     }
     let cash = u64_at(f, 51)?;
@@ -257,7 +258,6 @@ fn decode_state(
         clock,
         actual_supply,
         revision,
-        price_bps,
         gross,
         liability,
         exchange,

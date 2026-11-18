@@ -22,12 +22,14 @@ async fn load(cache: &support::Snapshot, key: solana_pubkey::Pubkey) -> OcelotVe
 }
 
 /// Same captured accounts and unchanged Phoenix/Ember executables on both sides.
-/// The deployed ELF reproduces the reviewer failure; the candidate must execute
+/// The original November 17 ELF reproduces the reviewer failure; both the
+/// proportional candidate and November 18 deployed ELF must execute
 /// every sampled redemption, close the proportional exposure and never overquote.
 #[tokio::test]
 async fn proportional_redemptions_survive_execution_time_mark_updates() {
     let path = Path::new("tests/fixtures/sol-normal-470602378.bin.gz");
     let mut candidate_count = 0;
+    let mut deployed_count = 0;
     for (market, address) in MARKETS.iter().enumerate() {
         let key = address.parse().unwrap();
         for one_perp in [true, false] {
@@ -35,11 +37,12 @@ async fn proportional_redemptions_survive_execution_time_mark_updates() {
                 if one_perp && offset != -1 {
                     continue;
                 }
-                for candidate in [false, true] {
-                    let mut cache = if candidate {
-                        support::Snapshot::candidate(path)
-                    } else {
-                        support::Snapshot::read(path)
+                for version in [0, 1, 2] {
+                    let candidate = version != 0;
+                    let mut cache = match version {
+                        0 => support::Snapshot::read(path),
+                        1 => support::Snapshot::candidate(path),
+                        _ => support::Snapshot::deployed(path),
                     };
                     let v = load(&cache, key).await;
                     let asset = v.state().unwrap().config.asset;
@@ -122,7 +125,11 @@ async fn proportional_redemptions_survive_execution_time_mark_updates() {
                                         closed,
                                         ocelot::quote::order(s, amount, false).unwrap().lots
                                     );
-                                    candidate_count += 1;
+                                    if version == 1 {
+                                        candidate_count += 1;
+                                    } else {
+                                        deployed_count += 1;
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -139,7 +146,7 @@ async fn proportional_redemptions_survive_execution_time_mark_updates() {
                         assert_eq!(failed, 46, "must reproduce the original defect");
                     }
                     println!(
-                        "PROPORTIONAL market={market} one_perp={one_perp} offset={offset} candidate={candidate} executed={} failed={failed}",
+                        "PROPORTIONAL market={market} one_perp={one_perp} offset={offset} version={version} executed={} failed={failed}",
                         61 - failed
                     );
                 }
@@ -147,4 +154,5 @@ async fn proportional_redemptions_survive_execution_time_mark_updates() {
         }
     }
     assert_eq!(candidate_count, 732);
+    assert_eq!(deployed_count, 732);
 }

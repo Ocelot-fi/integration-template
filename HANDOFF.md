@@ -1,5 +1,30 @@
 # Ocelot integration handoff, 14 November 2026
 
+## November 18 deployed-program verification
+
+Source `1d90a14faf9e3378248d931e08912f4f0c007606` targets the finalized mainnet ELF `3bb3a7bb…`, deployed at slot
+470782007. The fresh 48-account capture is from slot 470782801 and preserves all
+original program/account bytes. Historical fixtures and the earlier candidate
+remain unchanged. [Deployment identity, source commits, tests and limitations](DEPLOYED_PROGRAM_2026_11_18.md).
+
+The preceding PR already executes today's captured configuration. This update
+also reads the governance mint ceiling, so a lower configured limit tightens
+mint quotes/instructions. The existing 40 bp operating cap and 25 bp book cushion
+remain; valid keeper price-policy changes no longer affect ordinary user quotes.
+No output haircut, curve rewrite, ABI change, program deployment or activation.
+
+Source validation: 79 reference checks and 25 default checks pass. Deployed ELF
+replay executes 1,464 sampled trades, 732 shifted-oracle redemptions, 21 governance
+ceiling cases, 16 keeper-independence cases and 12 local template-router legs.
+The normal accepted-quote and instruction regression hashes are unchanged.
+Eight RPC-gated shared tests are excluded as skips; historical stress/timing
+results are not described as fresh runs. Clippy, formatting and whitespace pass.
+
+Titan still needs production V4 allowlisting, host/route acceptance and its own
+route-minimum rollback verification. Simulation/rebuild remains necessary during
+signing delays. The Ocelot deployment dependency is now verified; routing is not
+claimed activated. The older entries below retain historical evidence.
+
 ## November 17 book-based IOC limit follow-up
 
 Source `54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0` adds a 25 bp execution cushion beyond the worst price needed for

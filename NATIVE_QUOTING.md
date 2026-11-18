@@ -1,15 +1,17 @@
 # Native quoting implementation, updated 17 November 2026
 
+**18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
+Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
+price policy and a governance mint ceiling. The adapter reads that ceiling while
+preserving its 40 bp operating cap, 25 bp book cushion and existing output curves.
+Captured-state execution and shifted-oracle regressions pass. Titan activation
+remains pending; this verification does not deploy or activate anything.
+
+The following records the earlier implementation and validation checkpoints.
+
 **Latest adapter follow-up:** [book-based IOC limits](IOC_LIMITS.md) reserve policy headroom
 and cushion the required fill price. Curve arithmetic and worst-mid pricing are
 unchanged; a tighter shared cap can reduce available depth. Activation remains pending.
-
-**Latest candidate: [proportional redemption correction](PROPORTIONAL_REDEMPTIONS.md).**
-This adapter now mirrors an un-deployed program fix that closes the redeemed share of
-exposure, rounded up, instead of spending leverage-band headroom. The conservative curve
-and worst-mid adjustment remain unchanged. Coordinate program/SDK/Titan rollout before
-activation. The earlier planner's execution-rejection counts below are historical;
-updated reproduction, coverage and remaining limitations are in the linked record.
 
 **Current candidate:** [current-state quoting](CURRENT_STATE_QUOTING.md) removes
 the speculative post-order mark/EMA forecast introduced by the
@@ -432,7 +434,7 @@ copy and pass with these fixes. The full selected host suite, routed replay,
 default-feature suite and both Clippy configurations pass; counts are above.
 Router source and its SBF artifact are unchanged. No RPC-dependent upstream
 acceptance suite or live transaction was run. The owner requested committing these
-fixes for teammate re-review on the internal review branch. Public fork PR #10 remains at the
+fixes for teammate re-review on internal review branch. Public fork PR #10 remains at the
 previous submission; export follows internal review. No merge or activation is included.
 
 Ask Phoenix: **Can you share the Rust evaluator for per-action price validity,
@@ -462,7 +464,7 @@ The selected host suite now passes 46 tests; the 26-test default-feature suite,
 3 program/parity tests, 51 routed executions and both Clippy configurations pass.
 The original 205 comparisons, 39 matching declines and 4.144072 bp maximum
 underquote are unchanged. Router code and artifact are unchanged. The owner
-requested committing this additional fix for teammate re-review on the internal
+requested committing this additional fix for teammate re-review on internal
 review branch; public fork export follows internal review. Titan's cache,
 clock-refresh and quote-lifetime decisions remain open. Captured ANT limitations
 are recorded above; ANT support is a separate validation step before activation.

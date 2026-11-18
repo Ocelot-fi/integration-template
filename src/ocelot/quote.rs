@@ -266,7 +266,7 @@ fn order_with_limits(s: &State, limits: Limits, amount: u64, mint: bool) -> Resu
         return Err(invalid("below minimum Phoenix lot"));
     }
     let buy = if mint { m.long } else { s.position.base < 0 };
-    let limit_ticks = limit_ticks(s, buy)?;
+    let limit_ticks = limit_ticks(s, buy, mint)?;
     Ok(Order {
         lots,
         buy,
@@ -276,10 +276,22 @@ fn order_with_limits(s: &State, limits: Limits, amount: u64, mint: bool) -> Resu
     })
 }
 
-pub(crate) fn limit_ticks(s: &State, buy: bool) -> Result<u64> {
-    // Reserve 10 bp of the program's band for changes to its execution-time
-    // mark. Small policies use a zero-deviation cap; tick rounding is inward.
-    let bps = s.price_bps.saturating_sub(IOC_POLICY_HEADROOM_BPS).min(100) as u128;
+pub(crate) fn limit_ticks(s: &State, buy: bool, mint: bool) -> Result<u64> {
+    // The deployed program separates user execution from keeper price policy.
+    // Preserve the adapter's existing 40 bp cap; a lower governance mint ceiling
+    // tightens it with 10 bp headroom. Redemption has its own 1,000 bp program cap.
+    let bps = if mint {
+        let ceiling = match s.market.mint_execution_limit_bps {
+            0 => 300,
+            value @ 1..=1000 => value,
+            _ => return Err(invalid("invalid mint execution ceiling")),
+        };
+        ceiling
+            .saturating_sub(IOC_POLICY_HEADROOM_BPS)
+            .min(IOC_MAX_DEVIATION_BPS)
+    } else {
+        IOC_MAX_DEVIATION_BPS
+    } as u128;
     narrow(if buy {
         s.mark.ticks as u128 * (10_000 + bps) / 10_000
     } else {
@@ -287,6 +299,7 @@ pub(crate) fn limit_ticks(s: &State, buy: bool) -> Result<u64> {
     })
 }
 
+pub const IOC_MAX_DEVIATION_BPS: u16 = 40;
 pub const IOC_POLICY_HEADROOM_BPS: u16 = 10;
 pub const IOC_BOOK_CUSHION_BPS: u16 = 25;
 
@@ -309,7 +322,7 @@ pub(crate) fn cushioned_limit(worst: u64, order: &Order) -> Result<u64> {
     })
 }
 
-/// Candidate V4 closes at least the redeemed share of exposure, rounded up.
+/// Deployed V4 closes at least the redeemed share of exposure, rounded up.
 /// Mirrors withdrawal::plan, including cash-first payment and integer claims.
 pub fn redemption_lots(s: &State, limits: Limits, amount: u64) -> Result<u64> {
     let supply = s.market.shares;
