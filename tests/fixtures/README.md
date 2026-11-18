@@ -39,3 +39,10 @@ ELF `3bb3a7bb…`) and the original coherent `sol-normal-470782801.bin.gz` captu
 `Snapshot::deployed` replaces only Ocelot code for explicit historical-state
 replay. The fresh capture is replayed unchanged, including ProgramData padding.
 See [deployed identity, source commits and validation](../../DEPLOYED_PROGRAM_2026_11_18.md).
+
+The later November 18 live-depth incident adds `sol-normal-471112973.bin.gz` and
+its original capture JSON: 48 accounts from one RPC response, including the then
+live Phoenix payload `302004ae…` and unchanged Ocelot payload `bae5099f…`.
+No account or executable substitutions are used for this regression. Synthetic
+maker-insolvency and other-market-policy controls clone it explicitly in tests.
+See [maker simulation contract and incident evidence](../../MAKER_SIMULATION.md).

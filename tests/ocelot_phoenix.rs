@@ -499,8 +499,8 @@ async fn native_refresh_fees_capabilities_liquidity_and_withdrawals() {
     }
     v.update_state(&cache).await.unwrap();
     assert!(
-        v.quote(mint.clone()).is_err(),
-        "declared depth alone cannot imply fill availability"
+        v.quote(mint.clone()).unwrap().expected_output == before,
+        "maker collateral is evaluated by route simulation, not native quoting"
     );
     cache.0 = original.clone();
     put32(
@@ -556,8 +556,8 @@ async fn native_refresh_fees_capabilities_liquidity_and_withdrawals() {
         put32(d, 112 + j * 1336 + 1100, 10_000);
     }
     v.update_state(&cache).await.unwrap();
-    assert!(v.quote(mint.clone()).is_err());
-    assert!(v.quote(redeem).is_err());
+    assert_eq!(v.quote(mint.clone()).unwrap().expected_output, before);
+    assert!(v.quote(redeem).is_ok());
     cache.0 = original;
     cache.0.insert(spline, None);
     assert!(v.update_state(&cache).await.is_err());
@@ -1137,90 +1137,61 @@ async fn partially_binding_maker_limits_preserve_executable_small_quotes() {
     let small = request(&original_venue, true, 1_000_000);
     let large = request(&original_venue, true, 1_000_000_000);
     original_venue.quote(large.clone()).unwrap();
-    for (mode, maximum) in [
-        ("collateral", 1_000_000u32),
-        ("haircut", 10_000),
-        ("position", 10_000),
-    ] {
-        let mutate = |value: u32| {
-            let mut cache = support::Snapshot(original.0.clone());
-            if mode == "collateral" {
-                let d = &mut cache
-                    .0
-                    .get_mut(&s.exchange.indices[0])
-                    .unwrap()
-                    .as_mut()
-                    .unwrap()
-                    .data;
-                for node in d[96..].chunks_exact_mut(64) {
-                    let before = i64::from_le_bytes(node[48..56].try_into().unwrap());
-                    if before > 0 {
-                        put64(
-                            node,
-                            48,
-                            (before as u128 * value as u128 / maximum as u128) as u64,
-                        );
-                    }
-                }
-            } else {
-                let d = &mut cache.0.get_mut(&spline).unwrap().as_mut().unwrap().data;
-                for (j, base) in bases.iter().enumerate() {
-                    let o = 112 + j * 1336;
-                    if mode == "haircut" {
-                        put32(d, o + 1100, 10_000 - value);
-                    } else {
-                        put32(d, o + 1096, 1);
-                        put32(
-                            d,
-                            o + 1104,
-                            u32::try_from((base + value as i64).max(0)).unwrap(),
-                        );
-                        put32(
-                            d,
-                            o + 1108,
-                            u32::try_from((-base + value as i64).max(0)).unwrap(),
-                        );
-                    }
-                }
-            }
-            cache
-        };
-        // Find a fixture mutation with just enough capacity for a small trade.
-        // This search sets up the test; production quoting does not search.
-        let mut lo = 0;
-        let mut hi = maximum;
-        assert!(load(&mutate(hi), pool).await.quote(small.clone()).is_ok());
-        while lo < hi {
-            let mid = lo + (hi - lo) / 2;
-            if load(&mutate(mid), pool).await.quote(small.clone()).is_ok() {
-                hi = mid;
-            } else {
-                lo = mid + 1;
-            }
+    let maximum = 10_000u32;
+    let mutate = |value: u32| {
+        let mut cache = support::Snapshot(original.0.clone());
+        let d = &mut cache.0.get_mut(&spline).unwrap().as_mut().unwrap().data;
+        for (j, base) in bases.iter().enumerate() {
+            let o = 112 + j * 1336;
+            put32(d, o + 1096, 1);
+            put32(
+                d,
+                o + 1104,
+                u32::try_from((base + value as i64).max(0)).unwrap(),
+            );
+            put32(
+                d,
+                o + 1108,
+                u32::try_from((-base + value as i64).max(0)).unwrap(),
+            );
         }
-        assert!(
-            lo > 0 && lo < maximum,
-            "{mode}: must bind only part of the depth"
-        );
-        let cache = mutate(lo);
-        let mut v = load(&cache, pool).await;
-        let err = v.quote(large.clone()).unwrap_err();
-        assert!(format!("{err:?}").contains("spline"), "{mode}: {err:?}");
-        v.load_reference_oracle(&cache).await.unwrap();
-        let mut accepted = 0;
-        for amount in [1_000_000, 2_000_000, 5_000_000, 10_000_000, 100_000_000] {
-            let r = request(&v, true, amount);
-            if let Ok(q) = v.quote(r.clone()) {
-                assert!(
-                    q.expected_output <= v.reference_quote(&r).unwrap().output,
-                    "{mode} input={amount}"
-                );
-                accepted += 1;
-            }
+        cache
+    };
+    // Find a fixture mutation with just enough capacity for a small trade.
+    // This search sets up the test; production quoting does not search.
+    let mut lo = 0;
+    let mut hi = maximum;
+    assert!(load(&mutate(hi), pool).await.quote(small.clone()).is_ok());
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if load(&mutate(mid), pool).await.quote(small.clone()).is_ok() {
+            hi = mid;
+        } else {
+            lo = mid + 1;
         }
-        assert!(accepted > 0);
-        eprintln!(
-            "partial maker {mode}: parameter={lo}, accepted comparisons={accepted}, $1000 declined"
-        );
     }
+    assert!(
+        lo > 0 && lo < maximum,
+        "position limit must bind only part of the depth"
+    );
+    let cache = mutate(lo);
+    let mut v = load(&cache, pool).await;
+    let err = v.quote(large.clone()).unwrap_err();
+    assert!(format!("{err:?}").contains("spline"), "{err:?}");
+    v.load_reference_oracle(&cache).await.unwrap();
+    let mut accepted = 0;
+    for amount in [1_000_000, 2_000_000, 5_000_000, 10_000_000, 100_000_000] {
+        let r = request(&v, true, amount);
+        if let Ok(q) = v.quote(r.clone()) {
+            assert!(
+                q.expected_output <= v.reference_quote(&r).unwrap().output,
+                "position input={amount}"
+            );
+            accepted += 1;
+        }
+    }
+    assert!(accepted > 0);
+    eprintln!(
+        "partial maker position: parameter={lo}, accepted comparisons={accepted}, $1000 declined"
+    );
 }

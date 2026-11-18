@@ -1,5 +1,14 @@
 # Ocelot native issuer integration for Titan
 
+**18 November: maker solvency is now checked by Titan's route simulation.**
+The adapter quotes live declared spline depth with explicit position limits,
+without reconstructing makers' cross-market collateral and margin. This restores
+SOL quotes when a maker holds positions in markets with different oracle policies.
+The cached output curve, worst-mid pricing, IOC limits and Ocelot checks remain.
+**Simulation must inspect actual output as well as success:** Phoenix can skip an
+unfundable maker and fill at a worse price. Reject/reprice those routes, and retain
+the user's final on-chain route minimum. [Incident, contract and tests](MAKER_SIMULATION.md).
+
 **18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
 Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
 price policy and a governance mint ceiling. The adapter reads that ceiling while
@@ -80,7 +89,8 @@ constitute integration acceptance. See [evidence and Titan questions](HANDOFF.md
   accepts V3 mint and V4 redemption instructions. A changed runtime input fails instead of
   executing an order sized for a different quote.
 - Native issuer math, shared lot sizing, prepared quote limits, and an explicit
-  native Phoenix-provider interface and a bundled capacity-limited spline provider.
+  native Phoenix-provider interface and a bundled declared-spline provider with
+  explicit maker position caps. Maker portfolio solvency is left to route simulation.
   Allocation checks and complete issuer-versus-execution comparisons cover both directions.
 - Local replay of the actual captured Ocelot, Phoenix and Ember executables for
   SOL3L and SOL2S; direct versus routed output parity and guard rejection tests.
@@ -92,7 +102,9 @@ execution. Following Titan's November 10 guidance, `generate_swap_instruction()`
 encodes zero venue minimum and **must only be used inside a route that enforces
 the user's final minimum**. Titan confirms its production router owns that check;
 the supplied template router does not implement it. The adapter still validates
-quote eligibility, exact input, finance revision and the stricter of the finance policy and the 100 bps IOC band.
+quote eligibility, exact input and finance revision. IOC prices follow the required
+book level plus a 25 bp cushion, within the shared 40 bp operating cap and configured
+mint ceiling; see [the IOC policy](IOC_LIMITS.md).
 Both adapter builders encode `i64::MAX` in the required deadline field,
 leaving transaction expiry to Titan/frontend/wallet and Solana. The on-chain
 deadline comparison is unchanged; zero would mean expired, not disabled.

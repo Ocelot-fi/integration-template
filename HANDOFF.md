@@ -1,5 +1,40 @@
 # Ocelot integration handoff, 14 November 2026
 
+## November 18 maker-solvency handoff
+
+Source `f3b86405c3fbf410a0d0d6172f615b12978c846e` removes native maker portfolio/collateral estimates. This fixes
+the original slot-471112973 live outage, where other-market oracle policies caused
+all SOL maker depth to be excluded despite executable liquidity.
+[Contract, original capture and validation](MAKER_SIMULATION.md).
+
+Titan must check actual simulated output, not just simulation success. Phoenix
+can skip an unfundable maker and fill at a worse price. Reprice/discard/re-route
+shortfalls and retain the user's final on-chain route minimum. No production VM
+or RPC is added; this documents a required Titan host behavior, not its deployment.
+
+The curve algorithm, worst-mid model, issuer checks and IOC cushion policy remain.
+Restored depth improves some historical large SOL3L exits by up to 4.19 bp;
+4,962 changed amounts execute without overquotes. All other regression quotes and
+all bounds are unchanged. Negative-funded-collateral redemptions and ANT support
+remain separate. No program deployment or activation is included.
+
+Source validation: 95 substantive reference checks and 27 selected default checks
+pass; 16 RPC-gated shared tests are excluded. Original incident replay executes
+254 trades. Constructed 0–32 tick crossings cover 2,681,742 curve samples and
+51,706 successful execution comparisons with no overquotes or range holes; the
+existing two unavailable directions and two full exits remain pinned. Deployed
+range replays, output minima, cache, IOC and curve checks pass. Insolvency controls
+explicitly demonstrate worse successful fills and minimum-output rejection.
+Local quote batch means remain about 0.15 microseconds. Formatting and Clippy pass.
+
+Standalone export validation passes 14 focused reference checks (three optional
+router tests remain ignored here and were run in the source checkout). The export
+has 116 byte-identical source files, three normalized documentation files and
+three metadata/handoff files. All 122 checksums, formatting and privacy screening
+verify. The original live incident, insolvency-output control, deployed-program
+executions, golden quotes, cache coherence and slippage encoding are included.
+Earlier entries preserve historical evidence and do not override this contract.
+
 ## November 18 deployed-program verification
 
 Source `1d90a14faf9e3378248d931e08912f4f0c007606` targets the finalized mainnet ELF `3bb3a7bb…`, deployed at slot

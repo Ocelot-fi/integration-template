@@ -28,10 +28,12 @@ pub trait PhoenixQuoter: Send + Sync {
         false
     }
 
-    /// Model the full-fill IOC, including fees, funding, maker/taker risk,
-    /// uncross reserves and collateral movements. Conservative providers must
-    /// bound final issuer output, not merely individual book prices.
-    /// Reject partial fills and unavailable Phoenix/Ember deposits/withdrawals.
+    /// Model the full-fill IOC using declared depth, fees, funding, uncross
+    /// reserves and the issuer's collateral/margin/withdrawal constraints.
+    /// The native provider does not certify counterparty solvency. Titan must
+    /// simulate selected routes and check actual output, not only success status:
+    /// skipped makers can cause worse fills. The final route minimum protects
+    /// execution. Reject sizes beyond the locally prepared depth/capacity.
     fn quote(&self, order: &Order) -> Result<Fill>;
 
     /// A prepared lower bound on this provider's MODELED issuer output, with a matching
@@ -56,10 +58,10 @@ pub struct Order {
 pub struct Fill {
     pub lots: u64,
     /// Modeled full-fill notional, excluding fees, in USDC atoms. The bundled
-    /// provider uses a buy-cost upper bound / sell-proceeds lower bound.
+    /// provider bounds the declared-book model, conditional on maker fillability.
     pub quote_atoms: u64,
     /// Fee on that execution model, with any conservative rounding reserve.
-    /// Together with notional it must not overstate post-order equity.
+    /// Together with notional it bounds modeled post-order equity.
     pub fee_atoms: u64,
     /// Conservative child collateral after the order, before withdrawal. On a
     /// full close it must equal the model's remaining equity (checked below).

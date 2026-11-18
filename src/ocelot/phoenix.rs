@@ -1,4 +1,5 @@
-//! Native conservative spline quotes. Preparation reads only the supplied cache;
+//! Native declared-book quotes. Maker solvency is left to route simulation.
+//! Preparation reads only the supplied cache;
 //! queries are allocation-free and never invoke RPC or a transaction VM.
 //!
 //! Account layouts: rise-public 2ce47221ef04a8d5879d39d31e82f9e92021753e.
@@ -107,13 +108,13 @@ fn fresh_price_components(d: &[u8], o: usize, slot: u64) -> Result<bool> {
     Ok(true)
 }
 
-fn markets(s: &State) -> Result<HashMap<u32, RiskMarket>> {
+fn market_risk(s: &State) -> Result<RiskMarket> {
     let d = owned(s, PERP_MAP, "account:perp_asset_map", 48)?;
     let count = u32_at(d, 32)? as usize;
     if count > 1024 || d.len() < 48 + count * 1584 {
         return Err(invalid("invalid Phoenix risk map"));
     }
-    let mut result = HashMap::new();
+    let mut result = None;
     for i in 0..count {
         let o = 64 + i * 1584;
         // Tombstoned and spot slots are not perpetual risk metadata.
@@ -121,6 +122,11 @@ fn markets(s: &State) -> Result<HashMap<u32, RiskMarket>> {
             continue;
         }
         let asset = u16_at(d, o + 944)? as u32 | ((u16_at(d, o + 948)? as u32) << 16);
+        // Only Ocelot's traded asset affects this local valuation. Counterparty
+        // cross-market solvency is evaluated by Phoenix in Titan's simulation.
+        if asset as u64 != s.config.asset {
+            continue;
+        }
         let mut tiers = [(0, 0); 4];
         for (j, tier) in tiers.iter_mut().enumerate() {
             *tier = (u64_at(d, o + 1016 + 24 * j)?, u64_at(d, o + 1024 + 24 * j)?);
@@ -150,22 +156,19 @@ fn markets(s: &State) -> Result<HashMap<u32, RiskMarket>> {
             && d[o + 1456] == 0
             && u64_at(d, o + 1440)? == 0;
         if result
-            .insert(
-                asset,
-                RiskMarket {
-                    mark,
-                    funding: i64_at(d, o + 1312)?,
-                    tiers,
-                    fresh,
-                    oi_room: u64_at(d, o + 1432)?.saturating_sub(u64_at(d, o + 1424)?),
-                },
-            )
+            .replace(RiskMarket {
+                mark,
+                funding: i64_at(d, o + 1312)?,
+                tiers,
+                fresh,
+                oi_room: u64_at(d, o + 1432)?.saturating_sub(u64_at(d, o + 1424)?),
+            })
             .is_some()
         {
             return Err(invalid("duplicate risk market"));
         }
     }
-    Ok(result)
+    result.ok_or(invalid("missing target risk"))
 }
 
 /// Walk reachable nodes, never free-list contents. All pointers and counts are
@@ -201,13 +204,14 @@ fn tree_nodes(d: &[u8], stride: usize) -> Result<Vec<(u32, usize)>> {
     Ok(nodes)
 }
 
-struct Maker {
-    collateral: i128,
-    margin: u128,
+/// Exact account membership and target-asset inventory only. Do not reconstruct
+/// a maker's cross-margin portfolio or infer its executable size from collateral.
+/// Titan must simulate selected routes against Phoenix's actual risk engine.
+struct MakerPosition {
     base: i64,
-    supported: bool,
+    enabled: bool,
 }
-fn makers(s: &State, risks: &HashMap<u32, RiskMarket>) -> Result<HashMap<Pubkey, Maker>> {
+fn maker_positions(s: &State) -> Result<HashMap<Pubkey, MakerPosition>> {
     let idx = owned(s, s.exchange.indices[0], "account:global_trader_index", 96)?;
     let buf = owned(s, s.exchange.buffers[0], "account:active_trader_buffer", 96)?;
     let mut by_node = HashMap::new();
@@ -217,11 +221,9 @@ fn makers(s: &State, risks: &HashMap<u32, RiskMarket>) -> Result<HashMap<Pubkey,
         if result
             .insert(
                 trader,
-                Maker {
-                    collateral: i64_at(idx, o + 48)? as i128,
-                    margin: 0,
+                MakerPosition {
                     base: 0,
-                    supported: u32_at(idx, o + 56)? == 63,
+                    enabled: u32_at(idx, o + 56)? == 63,
                 },
             )
             .is_some()
@@ -237,56 +239,25 @@ fn makers(s: &State, risks: &HashMap<u32, RiskMarket>) -> Result<HashMap<Pubkey,
         let trader = by_node
             .get(&node)
             .ok_or(invalid("orphan active position"))?;
-        let maker = result
-            .get_mut(trader)
-            .ok_or(invalid("missing active maker"))?;
         if !positions.insert((node, asset)) {
             return Err(invalid("duplicate active position"));
         }
-        // Positive spot collateral adds no credit to this lower bound. Locked
-        // reserves and unknown extensions need their own rules before inclusion.
-        if asset == 0xffff_0000 || asset & 0xffff_0000 == 0xfffe_0000 {
+        if asset as u64 != s.config.asset {
             continue;
         }
-        if asset >= 0xff00_0000 {
-            maker.supported = false;
-            continue;
-        }
+        let maker = result
+            .get_mut(trader)
+            .ok_or(invalid("missing active maker"))?;
         let p = o + 24;
-        let base = i64_at(buf, p)?;
-        let quote = i64_at(buf, p + 8)?;
-        if asset as u64 == s.config.asset {
-            maker.base = base;
-        }
-        // Spline accounts cannot carry FIFO orders. Reject any inconsistent state.
+        maker.base = i64_at(buf, p)?;
+        // Preserve the supported spline/FIFO account shape for the traded asset.
         if u32_at(buf, p + 36)? != 0
             || u32_at(buf, p + 44)? != 0
             || u32_at(buf, p + 48)? != 0
             || u32_at(buf, p + 56)? != 0
         {
-            maker.supported = false;
+            maker.enabled = false;
         }
-        if base == 0 && quote == 0 {
-            continue;
-        }
-        let Some(risk) = risks.get(&asset) else {
-            maker.supported = false;
-            continue;
-        };
-        if !risk.fresh {
-            maker.supported = false;
-        }
-        let pnl = base as i128 * risk.mark as i128 + quote as i128;
-        let funding = base as i128 * (risk.funding as i128 - i64_at(buf, p + 16)? as i128);
-        maker.collateral = maker
-            .collateral
-            .checked_add(pnl.min(0))
-            .and_then(|n| n.checked_sub(funding))
-            .ok_or(invalid("maker collateral overflow"))?;
-        maker.margin = maker
-            .margin
-            .checked_add(risk.margin(base.unsigned_abs()))
-            .ok_or(invalid("maker margin overflow"))?;
     }
     Ok(result)
 }
@@ -443,15 +414,11 @@ impl NativePhoenix {
         if fee_micro >= 1_000_000 {
             return Err(invalid("unsupported taker fee"));
         }
-        let risks = markets(s)?;
-        let mut risk = risks
-            .get(&(s.config.asset as u32))
-            .ok_or(invalid("missing target risk"))?
-            .clone();
+        let mut risk = market_risk(s)?;
         if !risk.fresh || risk.mark as u128 != s.mark.quote_per_lot {
             return Err(invalid("stale native risk state"));
         }
-        let makers = makers(s, &risks)?;
+        let makers = maker_positions(s)?;
         if makers.contains_key(&s.config.trader) {
             return Err(invalid("cold child found in hot index"));
         }
@@ -500,22 +467,12 @@ impl NativePhoenix {
                 let Some(maker) = makers.get(&r.trader) else {
                     return Ok(zero);
                 };
-                if !maker.supported || r.trader == s.config.trader || maker.collateral <= 0 {
+                if !maker.enabled || r.trader == s.config.trader {
                     return Ok(zero);
                 }
-                // Keep risk-increasing fills within the first tier. Reserve the
-                // entire pre-uncross position margin, without credit for closing it.
-                let size_room = risk.tiers[0].0.saturating_sub(maker.base.unsigned_abs());
-                let effective = (maker.collateral as u128)
-                    .checked_mul((10_000 - r.leverage_decrease_bps) as u128)
-                    .ok_or(invalid("maker haircut overflow"))?
-                    / 10_000;
-                let free = effective.saturating_sub(maker.margin);
-                let mid_atoms = mid as u128 * s.config.tick_size as u128;
-                let per_lot = (risk.mark as u128).div_ceil(risk.tiers[0].1 as u128)
-                    + mid_atoms.abs_diff(risk.mark as u128);
-                let capacity = u64::try_from((free / per_lot).min(size_room as u128))
-                    .map_err(|_| invalid("maker capacity overflow"))?;
+                // Quote declared size, capped only by explicit maker inventory
+                // limits below. Phoenix determines collateral/margin eligibility
+                // when Titan simulates or executes the selected route.
                 let skip = [
                     sum_crossed(&asks, mid, false)?,
                     sum_crossed(&bids, mid, true)?,
@@ -523,7 +480,6 @@ impl NativePhoenix {
                 // Each maker independently reserves ALL potentially crossed FIFO
                 // size, even if another maker or hidden liquidity would take it.
                 let reserve = skip[0].saturating_add(skip[1]);
-                let available = capacity.saturating_sub(reserve);
                 let caps = if r.flags & 1 != 0 {
                     [
                         narrow((r.max_long_lots as i128 - maker.base as i128).max(0))?,
@@ -534,11 +490,11 @@ impl NativePhoenix {
                 };
                 Ok([
                     SideLimit {
-                        lots: available.min(caps[0].saturating_sub(reserve)),
+                        lots: caps[0].saturating_sub(reserve),
                         skip: skip[0],
                     },
                     SideLimit {
-                        lots: available.min(caps[1].saturating_sub(reserve)),
+                        lots: caps[1].saturating_sub(reserve),
                         skip: skip[1],
                     },
                 ])

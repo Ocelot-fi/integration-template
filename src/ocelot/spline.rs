@@ -2,7 +2,8 @@
 //!
 //! This is declared liquidity, NOT a certified executable-output lower bound.
 //! `from_account` remains a geometry diagnostic. The native provider uses
-//! `with_limits` to apply maker capacity and uncross reserves before merging.
+//! `with_limits` to apply explicit maker position caps and uncross reserves before merging.
+//! Maker portfolio solvency is left to Phoenix during route simulation.
 //!
 //! Layout reference: Ellipsis-Labs/rise-public, commit
 //! 2ce47221ef04a8d5879d39d31e82f9e92021753e, rust/accounts/src/spline_collection.rs.

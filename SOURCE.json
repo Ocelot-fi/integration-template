@@ -1,8 +1,8 @@
 {
-  "ocelot_source_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
-  "runtime_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
+  "ocelot_source_commit": "f3b86405c3fbf410a0d0d6172f615b12978c846e",
+  "runtime_commit": "f3b86405c3fbf410a0d0d6172f615b12978c846e",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Verified actual deployed Ocelot ELF 3bb3a7bb at slot 470782007. Decode governance mint ceiling while preserving 40 bp operating cap, 25 bp book cushion, output curves and instruction ABI. See DEPLOYED_PROGRAM_2026_11_18.md. No program change or activation.",
+  "review_scope": "Quote declared maker depth without cross-market maker solvency estimates. Titan must inspect simulated output, not only success, and enforce the route minimum. Curves, worst-mid, issuer checks and IOC policy unchanged. Original live incident replay and insolvency controls in MAKER_SIMULATION.md.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
@@ -11,7 +11,7 @@
   "exported_at": "2026-11-18",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "54a45bbad2c3b9bd3eeae89d4a23e09ca32961a0",
+  "previous_runtime_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
   "deployed_program_elf_sha256": "3bb3a7bb74aee8fb84e831f124ad798df97d39305f9ca60106886ad3bee1a9e6",
   "main_source_baseline": "705391e0289717c670862347ad886b10bd1bc6fb"
 }

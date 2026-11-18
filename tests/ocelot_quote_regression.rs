@@ -1,6 +1,6 @@
 #![allow(clippy::result_large_err)]
-//! Frozen November 17 current-state quote/instruction baseline. Numerical changes
-//! are independently exercised against the pinned candidate executable.
+//! Current-state quote/instruction baseline, updated for declared maker depth
+//! on November 18. See MAKER_SIMULATION.md for independent execution checks.
 //! Previous V4 instruction hash: 43c34f24af5754ed44e0eb7dd177648199e628da80ecbed44a7e4ce00a2fa93b.
 //! Redemption lot hints and three tiny-input error strings change; accepted quotes stay pinned.
 //! Pre-book-cushion instruction hash: c1b75fc343bc525b6c7fdee85a9ee03478c0a4dd87387c05061a50731a512f95.
@@ -93,9 +93,11 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
     }
     println!("upgrade baseline: {} records", out.lines().count());
     use sha2::{Digest, Sha256};
-    // Independently compared with the prior implementation: all accepted
-    // outputs, marginal prices and bounds are identical. Three one-atom inputs
-    // still decline but now report that closing costs consume the claim.
+    // Removing maker solvency caps restores better SOL3L redemption depth in
+    // sol3l-467430913 above ~591.59 tokens. All other quotes and all bounds stay
+    // unchanged. See MAKER_SIMULATION.md for the independent old/new comparison.
+    // Former accepted baseline: 50b34b5ffae92de2f8772a6358c6d03cfe6e376fa47c0cb23c3aed3fd2137288.
+    // Former full baseline: 32386193f752dea354edf1d5287d90154c588347a8559dc19caf4a32ce13fe4b.
     let accepted = out
         .lines()
         .filter(|line| {
@@ -105,10 +107,10 @@ async fn normal_quotes_and_instructions_match_upgrade_baseline() {
         .join("\n");
     assert_eq!(
         format!("{:x}", Sha256::digest(accepted.as_bytes())),
-        "50b34b5ffae92de2f8772a6358c6d03cfe6e376fa47c0cb23c3aed3fd2137288"
+        "cb411629af7047bb7f8f8dbdac120ab5ee85ee26cf2acc0a6afd33936a889978"
     );
     assert_eq!(
         format!("{:x}", Sha256::digest(out.as_bytes())),
-        "32386193f752dea354edf1d5287d90154c588347a8559dc19caf4a32ce13fe4b"
+        "cc39685074a5da9bb76bbbf0fc238692c4ead6844977ae538f6636308a91ad2d"
     );
 }

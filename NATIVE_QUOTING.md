@@ -1,4 +1,13 @@
-# Native quoting implementation, updated 17 November 2026
+# Native quoting implementation, updated 18 November 2026
+
+**18 November: maker solvency is now checked by Titan's route simulation.**
+The adapter quotes live declared spline depth with explicit position limits,
+without reconstructing makers' cross-market collateral and margin. This restores
+SOL quotes when a maker holds positions in markets with different oracle policies.
+The cached output curve, worst-mid pricing, IOC limits and Ocelot checks remain.
+**Simulation must inspect actual output as well as success:** Phoenix can skip an
+unfundable maker and fill at a worse price. Reject/reprice those routes, and retain
+the user's final on-chain route minimum. [Incident, contract and tests](MAKER_SIMULATION.md).
 
 **18 November: [verified against the deployed program](DEPLOYED_PROGRAM_2026_11_18.md).**
 Mainnet ELF `3bb3a7bb…` includes proportional redemptions, separation of user/keeper
@@ -156,22 +165,23 @@ All calculations use the supplied state, including actual fee overrides and risk
   taker liquidity. Unlike the earlier diagnostic, production follows the SDK's
   saturating expiry even for future-anchored entries, so they cannot be silently
   omitted from the slide-price check.
-- **Maker capacity:** Read live collateral and positions from the global trader
-  index and active buffer. Set conservative margin from all supported perp positions,
-  including funding debits/credits and negative PnL, with no positive PnL or spot
-  collateral credit. Apply each spline's collateral haircut and position limits.
-  Additional exposure stays inside the first leverage tier. Existing margin gets
-  no reduction credit; adverse execution reserves are charged on top. Both spot
-  and perp components require a fresh, nondivergent oracle quorum regardless of
-  their pricing weights. A nonzero-weight book component must also be fresh under
-  its cached threshold. A fresh aggregate mark alone does not establish
-  withdrawal eligibility; soft-stale margin/withdrawal rules are not modeled.
+- **Maker depth:** Read registered maker membership, permissions and target-asset
+  base positions from the coherent global index/active buffer batch. Apply explicit
+  spline max-long/max-short limits. Do not calculate maker collateral, portfolio
+  margin, funding/PnL adjustments or leverage haircuts, and do not restrict SOL
+  liquidity based on the maker's other markets. Titan's selected-route simulation
+  must evaluate actual Phoenix fillability and output; native estimates are not
+  unconditional executable-output lower bounds.
+- **Traded-asset validity:** Ocelot's own market still requires fresh, nondivergent
+  spot and perp quorum regardless of pricing weights. A weighted book component
+  must also be fresh. Its oracle profile, mark, funding, margin tiers and
+  open-interest room remain inputs to the issuer's valuation and capacity checks.
 - **FIFO uncrossing:** Never count FIFO liquidity toward quoted output. For each
   spline, reserve all FIFO lots that could cross its mid, independently of other
   makers, including orders that might expire or be rejected. Remove those lots
-  from its front and reserve their margin and position capacity. This intentionally
+  from its front and reserve their explicit position capacity. This intentionally
   understates liquidity without reproducing Phoenix's pro-rata/hidden-take matcher.
-  Crossed spline geometry requiring slide prices rejects preparation.
+  Locked/crossed spline geometry uses the side-specific worst-mid path.
 - **Taker and fees:** Model the child position, funding settlement and partial/full
   close cost basis. Read the book taker fee and child's override; round the effective
   rate upward and reserve up to one additional atom per lot for split-fill fee
@@ -197,8 +207,8 @@ Phoenix's per-action validity rules and oracle policy are also pinned. SHA-256
 over metadata bytes `352..608` followed by `808..813` must equal
 `afd967552f05e617f90d8eb493daa305b9f099c1efe87015a394d9bbb1f8b6df`.
 This is the policy in all four SOL captures: divergence radius 500, minimum one
-response, and both hard-stale multipliers zero. Other policy profiles fail closed;
-makers with nonzero positions using them contribute no liquidity. The live
+response, and both hard-stale multipliers zero. Other policy profiles fail closed
+for the traded asset only; a maker's positions in other markets do not gate depth. The live
 divergence scores are **not** pinned: each oracle must have score zero to count
 toward spot/perp quorum. The independent book component has no oracle score.
 Weights and stale thresholds remain live inputs, outside the policy hash. A zero
@@ -214,9 +224,9 @@ single-perp isolated child, an empty cold deposit parent, regular non-finalized
 Phoenix perp pricing, zero global withdrawal-margin-factor override and one
 index/buffer arena account each. It refuses hot children, unknown layouts,
 conditional-order children, pending child withdrawals, special commodity/after-hours
-price rules and crossed splines. Makers with unknown/locked-reserve extensions,
-stale or special-priced nonzero positions, or FIFO orders contribute no liquidity.
-Spot balances are ignored rather than added to capacity. Expanded arenas reject.
+price rules for the traded asset. Unknown makers, unsupported permissions and
+target-asset FIFO position shapes contribute no spline liquidity. Other-market
+positions and spot collateral are left to Phoenix simulation. Expanded arenas reject.
 Non-bootstrap mints below 10,000 LT output atoms decline, bounding the on-chain
 share-rounding check even when execution is better than the estimate.
 
