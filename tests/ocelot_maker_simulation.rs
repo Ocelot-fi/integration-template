@@ -150,7 +150,7 @@ async fn other_markets_do_not_gate_declared_sol_depth() {
                 assert_eq!(after.price, before.price);
             }
         }
-        // The traded asset still needs a supported policy and a fresh mark.
+        // The traded asset policy is also simulation-owned; its captured mark must be fresh.
         let d = &mut cache
             .0
             .get_mut(&ocelot::PERP_MAP)
@@ -171,6 +171,16 @@ async fn other_markets_do_not_gate_declared_sol_depth() {
         assert!(u64_at(d, o + 16).unwrap() > 0);
         d[o + 811] = 10;
         let mut v = baseline;
+        v.update_state(&cache).await.unwrap();
+        // Keep the stale-mark guard separate from oracle eligibility policy.
+        cache
+            .0
+            .get_mut(&ocelot::PERP_MAP)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .data[o + 16..o + 24]
+            .fill(0);
         assert!(v.update_state(&cache).await.is_err());
         assert!(!v.initialized());
     }

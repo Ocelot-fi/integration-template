@@ -46,3 +46,9 @@ live Phoenix payload `302004ae…` and unchanged Ocelot payload `bae5099f…`.
 No account or executable substitutions are used for this regression. Synthetic
 maker-insolvency and other-market-policy controls clone it explicitly in tests.
 See [maker simulation contract and incident evidence](../../MAKER_SIMULATION.md).
+
+The November 19 ANT fix adds `ant-normal-471413600.bin.gz` and capture JSON,
+48 original coherent accounts for ANT3L/ANT2S (Phoenix asset 110), including all
+three executable payloads. No executable replacement or state mutation is used
+in the original-capture tests. Controlled flag/oracle changes are separate tests.
+See [ANT evidence and capture command](../../ANT_SUPPORT.md).

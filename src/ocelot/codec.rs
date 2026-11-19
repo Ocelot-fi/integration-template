@@ -212,12 +212,14 @@ pub fn mark(value: &Account, c: &Config, slot: u64) -> Result<Mark> {
         if key(d, o + 904)? != c.book
             || u64_at(d, o + 936)? != c.tick_size
             || d[o + 946] as i8 != c.decimals
-            || ticks == 0
-            || observed == 0
-            || observed > slot
-            || slot - observed > 150
         {
-            return Err(invalid("stale or mismatched Phoenix mark"));
+            return Err(invalid("Phoenix mark market binding mismatch"));
+        }
+        if ticks == 0 {
+            return Err(invalid("zero Phoenix mark price"));
+        }
+        if observed == 0 || observed > slot || slot - observed > 150 {
+            return Err(invalid("stale or future Phoenix mark"));
         }
         return Ok(Mark {
             ticks,

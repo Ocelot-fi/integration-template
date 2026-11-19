@@ -73,7 +73,7 @@ fn asset_entry(cache: &support::Snapshot, asset: u64) -> usize {
 }
 
 #[tokio::test]
-async fn unreviewed_oracle_policies_invalidate_prepared_quotes() {
+async fn oracle_policies_do_not_gate_captured_mark_quotes() {
     for i in 0..FIXTURES.len() {
         let (v, cache) = fixture(i).await;
         let o = asset_entry(&cache, v.state().unwrap().config.asset);
@@ -101,11 +101,14 @@ async fn unreviewed_oracle_policies_invalidate_prepared_quotes() {
             assert_ne!(d[o + offset], value);
             d[o + offset] = value;
             let mut candidate = v.clone();
-            assert!(candidate.update_state(&changed).await.is_err());
-            assert!(!candidate.initialized());
-            assert!(candidate.state().is_err());
+            candidate.update_state(&changed).await.unwrap();
+            assert!(candidate.initialized());
             for mint in [true, false] {
-                assert!(candidate.quote(request(&v, mint, 5_000_000)).is_err());
+                let r = request(&v, mint, 5_000_000);
+                assert_eq!(
+                    candidate.quote(r.clone()).unwrap().expected_output,
+                    v.quote(r).unwrap().expected_output
+                );
             }
         }
     }
@@ -147,7 +150,7 @@ async fn divergence_quorum_and_validity_rules_match_execution_rejections() {
                     .unwrap();
                 let mut candidate = v.clone();
                 let refreshed = candidate.update_state(&changed).await;
-                assert_eq!(refreshed.is_ok(), flagged < 5);
+                refreshed.unwrap();
                 for mint in [true, false] {
                     let r = request(&v, mint, 5_000_000);
                     let executed = oracle.execute(
@@ -157,8 +160,7 @@ async fn divergence_quorum_and_validity_rules_match_execution_rejections() {
                         r.amount,
                     );
                     if flagged == 5 {
-                        assert!(!candidate.initialized());
-                        assert!(candidate.quote(r).is_err());
+                        assert!(candidate.quote(r).is_ok());
                         assert!(
                             executed.is_err(),
                             "all divergent: {} mint={mint}",
@@ -174,8 +176,8 @@ async fn divergence_quorum_and_validity_rules_match_execution_rejections() {
             }
         }
         // The review's rule mutation can reject execution without changing the
-        // mark or quotes. The production guard above rejects every policy edit,
-        // even when a particular captured transaction would still execute.
+        // mark or quotes. Simulation owns rejection of the changed policy;
+        // native quoting must not discard otherwise usable captured prices.
         let mut a = cache.0[&ocelot::PERP_MAP].clone().unwrap();
         a.data[o + 352 + 2 * 32 + 2] = 2;
         let oracle = v
@@ -208,7 +210,7 @@ async fn divergence_quorum_and_validity_rules_match_execution_rejections() {
 
 #[cfg(feature = "reference-simulation")]
 #[tokio::test]
-async fn fresh_divergent_responses_cannot_replace_a_stale_eligible_oracle() {
+async fn simulation_rejects_divergent_and_stale_oracle_inputs() {
     for i in [2, 3] {
         let (mut v, cache) = fixture(i).await;
         v.load_reference_oracle(&cache).await.unwrap();
@@ -243,10 +245,10 @@ async fn fresh_divergent_responses_cannot_replace_a_stale_eligible_oracle() {
                 .with_account(ocelot::PERP_MAP, a.clone())
                 .unwrap();
             let mut candidate = v.clone();
-            assert!(candidate.update_state(&changed).await.is_err());
-            assert!(!candidate.initialized());
+            candidate.update_state(&changed).await.unwrap();
+            assert!(candidate.initialized());
             let r = request(&v, false, 5_000_000);
-            assert!(candidate.quote(r.clone()).is_err());
+            assert!(candidate.quote(r.clone()).is_ok());
             assert!(
                 oracle
                     .execute(
@@ -287,11 +289,11 @@ async fn native_provider_initializes_and_quotes_without_io_or_allocations() {
 
 #[cfg(feature = "reference-simulation")]
 #[tokio::test]
-async fn zero_weight_oracles_still_require_freshness() {
+async fn simulation_enforces_zero_weight_oracle_validity() {
     use ocelot::simulation::USER;
     let mut accepted = 0;
     let mut rejected = 0;
-    let mut conservative_declines = 0;
+    let mut additional_executable = 0;
     for (i, (file, _)) in FIXTURES.iter().enumerate() {
         let (mut v, cache) = fixture(i).await;
         v.load_reference_oracle(&cache).await.unwrap();
@@ -329,11 +331,8 @@ async fn zero_weight_oracles_still_require_freshness() {
                 // Weight affects mark composition, not spot/perp validity. The
                 // zero-weight book is an executable exception in this policy.
                 let valid = count == 1 || age == 0;
-                assert_eq!(refreshed.is_ok(), valid, "{file}: start={start} age={age}");
-                assert_eq!(candidate.initialized(), valid);
-                if !valid {
-                    assert!(candidate.state().is_err());
-                }
+                refreshed.unwrap();
+                assert!(candidate.initialized());
                 for mint in [true, false] {
                     for amount in [1_000_000, 5_000_000] {
                         let r = request(&v, mint, amount);
@@ -348,10 +347,9 @@ async fn zero_weight_oracles_still_require_freshness() {
                             assert!(quoted.unwrap().expected_output <= executed.unwrap().output);
                             accepted += 1;
                         } else {
-                            assert!(quoted.is_err());
-                            // A small soft-stale penalty may leave some trades
-                            // executable; declining them is intentional. Severe
-                            // staleness and the review's recent redeem cases fail.
+                            assert!(quoted.is_ok());
+                            // Simulation filters actual stale-policy failures.
+                            // Small penalties can leave the trade executable.
                             if age == 500 || (i >= 2 && !mint) {
                                 assert!(
                                     executed.is_err(),
@@ -361,7 +359,7 @@ async fn zero_weight_oracles_still_require_freshness() {
                             if executed.is_err() {
                                 rejected += 1;
                             } else {
-                                conservative_declines += 1;
+                                additional_executable += 1;
                             }
                         }
                     }
@@ -370,9 +368,9 @@ async fn zero_weight_oracles_still_require_freshness() {
         }
     }
     assert_eq!(accepted, 80);
-    assert_eq!(rejected + conservative_declines, 64);
+    assert_eq!(rejected + additional_executable, 64);
     eprintln!(
-        "zero-weight regression: {accepted} accepted executions, {rejected} execution rejections, {conservative_declines} deliberate conservative declines"
+        "zero-weight regression: {accepted} accepted executions, {rejected} execution rejections, {additional_executable} previously excluded executable trades"
     );
 }
 
@@ -993,15 +991,8 @@ async fn original_transactions_keep_output_and_deadline_guards_as_liquidity_expi
                 .data = bincode::serialize(&clock).unwrap();
             let mut refreshed = v.clone();
             let prepared = refreshed.update_state(&later).await;
-            if k == 51 {
-                assert!(
-                    prepared.is_err(),
-                    "stale oracle components must invalidate native quotes"
-                );
-                assert!(!refreshed.initialized());
-            } else {
-                prepared.unwrap();
-            }
+            prepared.unwrap(); // Component validity is checked by simulation.
+
             let execution_bank = v.execution_oracle().unwrap().with_clock(&clock);
             for (r, quoted, floor, ix) in &originals {
                 let exec =

@@ -103,6 +103,15 @@ fn pack(folder: &Path, cache: &Snapshot) -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
+    // Optional comma-separated market addresses; defaults preserve SOL captures.
+    let market_list = std::env::var("OCELOT_CAPTURE_MARKETS").unwrap_or_else(|_| MARKETS.join(","));
+    let markets: Vec<Pubkey> = market_list
+        .split(',')
+        .map(str::parse)
+        .collect::<std::result::Result<_, _>>()?;
+    if markets.is_empty() {
+        return Err("at least one market is required".into());
+    }
     let folder = Path::new(args.get(1).ok_or(
         "usage: capture_locked <dir> [samples=100] [interval_ms=1500] [captures_per_class=2]",
     )?);
@@ -115,9 +124,9 @@ async fn main() -> Result<()> {
     let cache = RpcClientCache::new(RpcClient::new(url));
     let mut keys = vec![];
     let mut book = None;
-    for market in MARKETS {
+    for &market in &markets {
         // Never format an RPC error: transport errors may contain API keys.
-        let v = venue(&cache, market.parse()?)
+        let v = venue(&cache, market)
             .await
             .map_err(|_| "dependency discovery failed (RPC details suppressed)")?;
         let b = v.state()?.config.book;
@@ -196,8 +205,8 @@ async fn main() -> Result<()> {
             continue;
         }
         let mut valid = true;
-        for market in MARKETS {
-            if venue(&final_cache, market.parse()?).await.is_err() {
+        for &market in &markets {
+            if venue(&final_cache, market).await.is_err() {
                 valid = false;
                 break;
             }

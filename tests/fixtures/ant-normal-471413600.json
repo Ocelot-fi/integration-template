@@ -1,0 +1,17 @@
+{
+  "accounts": 48,
+  "ask": 10072,
+  "ask_lots": 490337,
+  "bid": 10043,
+  "bid_lots": 488350,
+  "clock_slot": 471413600,
+  "context_slot": 471413600,
+  "executable_sha256": {
+    "CpLah6JAC9967YiVQnQJegfCKEjLEcUYmx3PCYgg9xWf": "bae5099f673264794a1e8cbea540b75e9f229aa51b7d7cb4dfcf432685e59ca5",
+    "EMBERpYNE6ehWmXymZZS2skiFmCa9V5dp14e1iduM5qy": "cbf33bb02b0f6b30dcc8083e80ee7e3e9565647236b084074fc754aa6753ded0",
+    "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih": "302004ae6d89b08f905ecda265d3fca77ed43ab30475396c150b3b70b91162f4"
+  },
+  "future_active_makers": [],
+  "geometry": "Normal",
+  "note": "All state and executable accounts from one getMultipleAccounts response; original bytes, no mutations."
+}

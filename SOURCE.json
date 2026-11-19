@@ -1,17 +1,17 @@
 {
-  "ocelot_source_commit": "f3b86405c3fbf410a0d0d6172f615b12978c846e",
-  "runtime_commit": "f3b86405c3fbf410a0d0d6172f615b12978c846e",
+  "ocelot_source_commit": "5abb1158c227536f9a1e73b49f38c49845316a0d",
+  "runtime_commit": "5abb1158c227536f9a1e73b49f38c49845316a0d",
   "prior_reviewed_runtime_commit": "a8c5f9fd5a710eb944d6302479035596337f8802",
-  "review_scope": "Quote declared maker depth without cross-market maker solvency estimates. Titan must inspect simulated output, not only success, and enforce the route minimum. Curves, worst-mid, issuer checks and IOC policy unchanged. Original live incident replay and insolvency controls in MAKER_SIMULATION.md.",
+  "review_scope": "Enable ANT3L/ANT2S from captured marks and declared depth without SOL-only oracle-policy or commodity/session eligibility guards. Titan simulation evaluates actual output and Phoenix action eligibility. Curves, worst-mid, issuer checks and IOC limits unchanged. Original ANT capture and execution evidence in ANT_SUPPORT.md.",
   "upstream": {
     "repository": "https://github.com/Titan-Pathfinder/integration-template",
     "commit": "c0bb5c9b7f7fc7d00f80c24852ef36942fc8464d",
     "purpose": "Titan venue integration; upstream common quote and route tests retained"
   },
-  "exported_at": "2026-11-18",
+  "exported_at": "2026-11-19",
   "scope": "Standalone integration package, public-chain fixtures, test-only output guard and screened technical handoff. No application source/history, business documents or credentials.",
   "changes_during_export": "README/fixture documentation links normalized; internal PR references removed; HANDOFF and EXPORT_VALIDATION refreshed. Rust, test sources, manifests, locks, measurements and fixtures are byte-identical to the committed source.",
-  "previous_runtime_commit": "1d90a14faf9e3378248d931e08912f4f0c007606",
+  "previous_runtime_commit": "f3b86405c3fbf410a0d0d6172f615b12978c846e",
   "deployed_program_elf_sha256": "3bb3a7bb74aee8fb84e831f124ad798df97d39305f9ca60106886ad3bee1a9e6",
   "main_source_baseline": "705391e0289717c670862347ad886b10bd1bc6fb"
 }

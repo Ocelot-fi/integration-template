@@ -1,5 +1,40 @@
 # Full-exit capacity follow-up export, 14 November 2026
 
+## November 19 ANT quoting and eligibility fix
+
+Source `5abb1158c227536f9a1e73b49f38c49845316a0d` removes the remaining SOL-only policy hash and
+commodity/session/finalized-price gates on the traded asset. ANT3L and ANT2S now
+quote from the captured mark and declared book. Phoenix action eligibility is
+checked by Titan's route simulation. The earlier maker-solvency change did not
+remove these target-asset gates, so the preceding export still refused ANT.
+[Root cause, scope, original snapshot and tests](ANT_SUPPORT.md).
+
+No new asset whitelist, pricing model, production RPC/VM or program upgrade.
+Positive/recent marks and account bindings remain required. The existing curve,
+worst-mid, issuer accounting and IOC limits are unchanged. Check actual simulated
+output as well as success; reject/reprice/reroute shortfalls and retain the final
+on-chain user minimum. This is the same simulation ownership used for makers.
+
+The original 48-account ANT capture at slot 471413600 passes 258 executions across
+both directions and tokens, including $1–$5,000 mints and full exits, with zero
+overquotes or failures. Eight mint/partial/full-redemption executions use actual
+post-trade accounts; 20 controlled session-flag executions also pass. All 154,651
+lot-edge/interior curve checks and 12 local template-router trades pass. The
+session mutations are not independent after-hours captures.
+
+Source validation passes 99 substantive reference checks (98 in the full suite
+plus the new ANT curve check), 27 selected default checks, library Clippy and
+formatting. Sixteen RPC-gated shared tests are excluded as skips. SOL output and
+instruction regression hashes remain unchanged. No Titan production activation
+or internal package publication is implied; import this revision to replace the
+adapter packaged as ocelot 0.2.1. Negative-funded-collateral behavior is unchanged.
+
+Standalone checkout repeats 20 checks: four ANT tests, 14 Phoenix tests, the
+unchanged SOL quote/instruction regression and the explicit ANT router test. All
+pass. Formatting passes; 120 source/export files are byte-identical, three docs
+only normalize public links/references, and all 126 export checksums verify.
+Earlier entries are historical; their ANT exclusions are superseded here.
+
 ## November 18 maker-solvency handoff
 
 Source `f3b86405c3fbf410a0d0d6172f615b12978c846e` removes native maker portfolio/collateral estimates. This fixes

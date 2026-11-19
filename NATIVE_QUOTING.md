@@ -1,4 +1,10 @@
-# Native quoting implementation, updated 18 November 2026
+# Native quoting implementation, updated 19 November 2026
+
+**19 November: ANT3L / ANT2S quoting enabled and tested.** The adapter no longer
+requires SOL's oracle-policy hash or rejects nonzero commodity/session flags.
+It quotes the captured mark and declared book, while Titan/Phoenix simulation
+checks oracle validity and action eligibility. [Current behavior and ANT validation](ANT_SUPPORT.md).
+This supersedes the ANT exclusions and native oracle-policy guards in older records.
 
 **18 November: maker solvency is now checked by Titan's route simulation.**
 The adapter quotes live declared spline depth with explicit position limits,
@@ -172,10 +178,11 @@ All calculations use the supplied state, including actual fee overrides and risk
   liquidity based on the maker's other markets. Titan's selected-route simulation
   must evaluate actual Phoenix fillability and output; native estimates are not
   unconditional executable-output lower bounds.
-- **Traded-asset validity:** Ocelot's own market still requires fresh, nondivergent
-  spot and perp quorum regardless of pricing weights. A weighted book component
-  must also be fresh. Its oracle profile, mark, funding, margin tiers and
-  open-interest room remain inputs to the issuer's valuation and capacity checks.
+- **Traded-asset valuation:** Use the positive, recent captured mark already
+  checked against the market/book binding. Do not reproduce Phoenix's component
+  quorum, divergence, hard-stale policy or commodity/session eligibility checks.
+  Those are evaluated by simulation. Funding, margin tiers and open-interest
+  room remain inputs to the issuer's valuation and capacity model.
 - **FIFO uncrossing:** Never count FIFO liquidity toward quoted output. For each
   spline, reserve all FIFO lots that could cross its mid, independently of other
   makers, including orders that might expire or be rejected. Remove those lots
@@ -203,42 +210,34 @@ only the exact static 136-byte configuration validated by all four captures
 Any configuration change requires review. Vault balances remain live cache inputs.
 No dependency on a local `.context` checkout is needed to build the package.
 
-Phoenix's per-action validity rules and oracle policy are also pinned. SHA-256
-over metadata bytes `352..608` followed by `808..813` must equal
-`afd967552f05e617f90d8eb493daa305b9f099c1efe87015a394d9bbb1f8b6df`.
-This is the policy in all four SOL captures: divergence radius 500, minimum one
-response, and both hard-stale multipliers zero. Other policy profiles fail closed
-for the traded asset only; a maker's positions in other markets do not gate depth. The live
-divergence scores are **not** pinned: each oracle must have score zero to count
-toward spot/perp quorum. The independent book component has no oracle score.
-Weights and stale thresholds remain live inputs, outside the policy hash. A zero
-spot/perp weight does not bypass validity checks; only the book can be disabled
-by weight under the pinned rules. This is covered by executable regression tests.
-The SDK supplies these layouts but not the per-action validity evaluator; this
-guard is a conservative restriction, not an implementation of that evaluator.
+Phoenix's per-action validity rules, oracle quorum/divergence settings and asset
+flags are no longer native admission criteria. A policy change can leave the
+captured quote unchanged while making execution unavailable or changing output;
+Titan must inspect simulated output and reject/reprice/re-route accordingly.
+The mark's positive price, slot age and account bindings remain validated. An
+actual stale mark is reported separately from invalid market bindings or a zero
+price. See [current policy and negative-control evidence](ANT_SUPPORT.md).
 
 ## Supported scope and conservative refusals
 
 The provider supports the current classic SPL USDC/LT issuer path: a cold,
-single-perp isolated child, an empty cold deposit parent, regular non-finalized
-Phoenix perp pricing, zero global withdrawal-margin-factor override and one
+single-perp isolated child, an empty cold deposit parent,
+Phoenix captured-mark pricing, zero global withdrawal-margin-factor override and one
 index/buffer arena account each. It refuses hot children, unknown layouts,
-conditional-order children, pending child withdrawals, special commodity/after-hours
-price rules for the traded asset. Unknown makers, unsupported permissions and
+conditional-order children and pending child withdrawals. Unknown makers, unsupported permissions and
 target-asset FIFO position shapes contribute no spline liquidity. Other-market
 positions and spot collateral are left to Phoenix simulation. Expanded arenas reject.
 Non-bootstrap mints below 10,000 LT output atoms decline, bounding the on-chain
 share-rounding check even when execution is better than the estimate.
 
-**ANT launch coverage is not established.** In both November 9 captures (slots
+**Historical ANT exclusion, superseded on November 19:** In both November 9 captures (slots
 467430913 and 467431351), the Phoenix `ANTHROPIC` entry has policy hash
 `7b047ebde93b9ee45e84d217b60493e2e5a0a95b44e0527318b94149c76dc10b`, with both
 hard-stale multipliers 10 rather than SOL's zero. Its special-price status byte
-at metadata offset 1456 is also 5 rather than zero. Either condition is outside
-this provider's supported target state. These are captured observations, not a
-new live account read or an executed ANT quote. Before enabling ANT3L/ANT2S,
-capture their current configured accounts and validate oracle policy, special
-pricing and mint/redeem execution. Adding another hash alone is insufficient.
+at metadata offset 1456 is also 5 rather than zero. Both conditions were outside
+the then-supported target state. These are captured observations, not a
+new live account read or an executed ANT quote. The November 19 update captures both ANT markets and validates their execution;
+it removes policy/asset admission rules instead of adding another hash.
 
 These restrictions can decline trades that Phoenix would execute. They do not
 claim to duplicate the full Phoenix matcher. Supported-snapshot agreement is

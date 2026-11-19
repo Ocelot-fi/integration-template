@@ -1,5 +1,11 @@
 # Ocelot native issuer integration for Titan
 
+**19 November: ANT3L / ANT2S quoting enabled and tested.** The adapter no longer
+requires SOL's oracle-policy hash or rejects nonzero commodity/session flags.
+It quotes the captured mark and declared book, while Titan/Phoenix simulation
+checks oracle validity and action eligibility. [Current behavior and ANT validation](ANT_SUPPORT.md).
+This supersedes the ANT exclusions and native oracle-policy guards in older records.
+
 **18 November: maker solvency is now checked by Titan's route simulation.**
 The adapter quotes live declared spline depth with explicit position limits,
 without reconstructing makers' cross-market collateral and margin. This restores
@@ -32,7 +38,7 @@ The program and final route minimum remain the execution guards.
 Submitted for engineering review in [PR #10](https://github.com/Titan-Pathfinder/integration-template/pull/10).
 Activation remains pending: Titan's V4 CPI allowlist and production host/route
 acceptance, simulation recovery, and review of the IOC-limit follow-up.
-ANT remains outside the validated oracle profile. No Ocelot deployment is included.
+ANT captured-state validation is included in the November 19 update. No Ocelot deployment is included.
 
 ## Earlier submission history
 

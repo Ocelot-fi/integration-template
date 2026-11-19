@@ -57,57 +57,9 @@ impl RiskMarket {
     }
 }
 
-// PriceComponent layout from the pinned SDK. A fresh aggregate mark alone is
-// insufficient: Phoenix can penalize soft-stale oracle components and reject
-// withdrawals. We do not model those penalties; require fresh, nondivergent
-// component quorum and the exact policy exercised by our captured SOL markets.
-// The SDK supplies the layout but not the per-action validity evaluator.
-fn fresh_price_components(d: &[u8], o: usize, slot: u64) -> Result<bool> {
-    let mut policy = Sha256::new();
-    policy.update(&d[o + 352..o + 608]); // Per-action price validity rules.
-    policy.update(&d[o + 808..o + 813]); // Radius, quorum, hard-stale multipliers.
-    let reviewed: [u8; 32] = [
-        0xaf, 0xd9, 0x67, 0x55, 0x2f, 0x05, 0xe6, 0x17, 0xf9, 0x0d, 0x8e, 0xb4, 0x93, 0xda, 0xa3,
-        0x05, 0xb9, 0xf0, 0x99, 0xc1, 0xef, 0xe8, 0x70, 0x15, 0xa3, 0x94, 0xd9, 0xbb, 0xb1, 0xf8,
-        0xb6, 0xdf,
-    ];
-    if <[u8; 32]>::from(policy.finalize()) != reviewed {
-        return Ok(false);
-    }
-    let minimum = d[o + 810] as usize;
-    if !(1..=5).contains(&minimum) {
-        return Ok(false);
-    }
-    for (start, weight, threshold, count) in
-        [(32, 112, 120, 5), (168, 248, 256, 5), (264, 280, 288, 1)]
-    {
-        // Under the pinned validity rules, spot/perp quorum is required even
-        // when its contribution to the aggregate mark is zero. Only the book
-        // component can be disabled by a zero weight.
-        if count == 1 && u64_at(d, o + weight)? == 0 {
-            continue;
-        }
-        let threshold = u64_at(d, o + threshold)?;
-        let mut fresh = 0;
-        for i in 0..count {
-            let observed = u64_at(d, o + start + i * 16)?;
-            if u64_at(d, o + start + i * 16 + 8)? > 0
-                && observed <= slot
-                && slot - observed < threshold
-                // The book component is not an oracle response. Divergence is
-                // live state, shared by each oracle's spot/perp observations.
-                && (count == 1 || d[o + 640 + 40 * i] == 0)
-            {
-                fresh += 1;
-            }
-        }
-        if fresh < if count == 1 { 1 } else { minimum } {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
+// Quote from the captured mark. Phoenix's oracle policies, component freshness,
+// divergence and commodity/session rules determine execution eligibility in
+// Titan's simulation; they are not local asset-admission rules.
 fn market_risk(s: &State) -> Result<RiskMarket> {
     let d = owned(s, PERP_MAP, "account:perp_asset_map", 48)?;
     let count = u32_at(d, 32)? as usize;
@@ -147,14 +99,9 @@ fn market_risk(s: &State) -> Result<RiskMarket> {
             .checked_mul(u64_at(d, o + 936)?)
             .filter(|v| *v > 0)
             .ok_or(invalid("invalid risk mark"))?;
-        // Special commodity/after-hours and finalized-price rules need their
-        // own price bounds. Do not apply the regular perpetual model to them.
-        let fresh = observed > 0
-            && observed <= s.clock.slot
-            && s.clock.slot - observed <= 150
-            && fresh_price_components(d, o, s.clock.slot)?
-            && d[o + 1456] == 0
-            && u64_at(d, o + 1440)? == 0;
+        // Match the cached mark used by Ocelot's valuation. Do not require SOL's
+        // oracle policy or asset classification: simulation evaluates those.
+        let fresh = observed > 0 && observed <= s.clock.slot && s.clock.slot - observed <= 150;
         if result
             .replace(RiskMarket {
                 mark,
@@ -415,8 +362,13 @@ impl NativePhoenix {
             return Err(invalid("unsupported taker fee"));
         }
         let mut risk = market_risk(s)?;
-        if !risk.fresh || risk.mark as u128 != s.mark.quote_per_lot {
-            return Err(invalid("stale native risk state"));
+        if !risk.fresh {
+            return Err(invalid("stale Phoenix risk mark"));
+        }
+        if risk.mark as u128 != s.mark.quote_per_lot {
+            return Err(invalid(
+                "Phoenix risk mark does not match captured valuation",
+            ));
         }
         let makers = maker_positions(s)?;
         if makers.contains_key(&s.config.trader) {
